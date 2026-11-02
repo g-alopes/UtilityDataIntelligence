@@ -1,0 +1,5 @@
+AccountNumber,CustomerName,Email,ServiceAddress
+ACC-10001,Jane Smith,jane@example.com,"100 Main St, Springfield"
+ACC-10002,John Doe,not-an-email,"200 Oak Ave"
+,Missing Number,,300 Pine Rd
+ACC-10004,Robert Brown,robert@example.com,"400 Pine St"

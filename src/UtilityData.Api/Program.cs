@@ -9,6 +9,7 @@ using UtilityData.Application.Abstractions;
 using UtilityData.Infrastructure;
 using UtilityData.Infrastructure.Identity;
 using UtilityData.Infrastructure.Persistence;
+using UtilityData.Api.Imports;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
@@ -93,6 +94,11 @@ builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentTenant, HttpCurrentTenant>();
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
+builder.Services.AddScoped<ImportApprovalService>();
+builder.Services.Configure<ImportStorageOptions>(
+    builder.Configuration.GetSection(ImportStorageOptions.SectionName));
+builder.Services.AddScoped<CsvImportProcessor>();
+builder.Services.AddHostedService<CsvImportWorker>();
 
 var app = builder.Build();
 
@@ -129,4 +135,5 @@ app.MapControllers();
 
 app.MapAuthEndpoints();
 app.MapTenantEndpoints();
+app.MapImportEndpoints();
 app.Run();

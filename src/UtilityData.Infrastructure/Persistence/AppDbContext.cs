@@ -13,6 +13,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<CustomerAccount> CustomerAccounts => Set<CustomerAccount>();
     public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
     public DbSet<TenantMembership> TenantMemberships => Set<TenantMembership>();
+    public DbSet<ImportRecord> ImportRecords => Set<ImportRecord>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

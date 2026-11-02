@@ -199,8 +199,27 @@ namespace UtilityData.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("ApprovedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ApprovedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("ApprovedRecordCount")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<string>("FileName")
                         .IsRequired()
@@ -213,6 +232,11 @@ namespace UtilityData.Infrastructure.Persistence.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
+                    b.Property<string>("StoredFilePath")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
 
@@ -224,9 +248,64 @@ namespace UtilityData.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Status", "CreatedAtUtc");
+
                     b.HasIndex("TenantId", "CreatedAtUtc");
 
                     b.ToTable("ImportBatches", (string)null);
+                });
+
+            modelBuilder.Entity("UtilityData.Domain.Entities.ImportRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AccountNumber")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CustomerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.Property<string>("Errors")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<Guid>("ImportBatchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsValid")
+                        .HasColumnType("bit");
+
+                    b.Property<long>("RowNumber")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ServiceAddress")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ImportBatchId");
+
+                    b.HasIndex("TenantId", "ImportBatchId", "IsValid");
+
+                    b.HasIndex("TenantId", "ImportBatchId", "RowNumber")
+                        .IsUnique();
+
+                    b.ToTable("ImportRecords", (string)null);
                 });
 
             modelBuilder.Entity("UtilityData.Domain.Entities.Tenant", b =>
@@ -413,6 +492,21 @@ namespace UtilityData.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("UtilityData.Domain.Entities.ImportBatch", b =>
                 {
+                    b.HasOne("UtilityData.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("UtilityData.Domain.Entities.ImportRecord", b =>
+                {
+                    b.HasOne("UtilityData.Domain.Entities.ImportBatch", null)
+                        .WithMany()
+                        .HasForeignKey("ImportBatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("UtilityData.Domain.Entities.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
