@@ -4,41 +4,27 @@ using UtilityData.Domain.Entities;
 
 namespace UtilityData.Infrastructure.Persistence.Repositories;
 
-internal sealed class CustomerAccountRepository(AppDbContext dbContext) : ICustomerAccountRepository
+internal sealed class CustomerAccountRepository(AppDbContext db, ICurrentTenant tenant) : ICustomerAccountRepository
 {
-    public async Task<IReadOnlyList<CustomerAccount>> GetRecentAsync(
-        Guid tenantId, int take, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<CustomerAccount>> GetRecentAsync(int take, CancellationToken cancellationToken = default)
     {
-        if (tenantId == Guid.Empty) throw new ArgumentException("Tenant ID is required.", nameof(tenantId));
-        if (take is < 1 or > 500) throw new ArgumentOutOfRangeException(nameof(take), "Take must be between 1 and 500.");
-
-        return await dbContext.CustomerAccounts
-            .AsNoTracking()
-            .Where(x => x.TenantId == tenantId)
-            .OrderByDescending(x => x.CreatedAtUtc)
-            .Take(take)
-            .ToListAsync(cancellationToken);
+        if (take is < 1 or > 500) throw new ArgumentOutOfRangeException(nameof(take));
+        return await db.CustomerAccounts.AsNoTracking()
+            .Where(x => x.TenantId == tenant.TenantId)
+            .OrderByDescending(x => x.CreatedAtUtc).Take(take).ToListAsync(cancellationToken);
     }
 
-    public Task<int> CountAsync(Guid tenantId, CancellationToken cancellationToken = default)
-    {
-        if (tenantId == Guid.Empty) throw new ArgumentException("Tenant ID is required.", nameof(tenantId));
-
-        return dbContext.CustomerAccounts
-            .CountAsync(x => x.TenantId == tenantId, cancellationToken);
-    }
+    public Task<int> CountAsync(CancellationToken cancellationToken = default) =>
+        db.CustomerAccounts.CountAsync(x => x.TenantId == tenant.TenantId, cancellationToken);
 
     public async Task AddRangeAsync(IEnumerable<CustomerAccount> accounts, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(accounts);
-        var items = accounts.ToArray();
-        if (items.Length == 0) return;
-
-        var tenantIds = items.Select(x => x.TenantId).Distinct().ToArray();
-        if (tenantIds.Length != 1 || tenantIds[0] == Guid.Empty)
-            throw new InvalidOperationException("A batch must contain accounts from exactly one valid tenant.");
-
-        await dbContext.CustomerAccounts.AddRangeAsync(items, cancellationToken);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        var rows = accounts.ToArray();
+        if (rows.Length == 0) return;
+        if (rows.Any(x => x.TenantId != tenant.TenantId))
+            throw new UnauthorizedAccessException("One or more accounts do not belong to the current tenant.");
+        await db.CustomerAccounts.AddRangeAsync(rows, cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
     }
 }
