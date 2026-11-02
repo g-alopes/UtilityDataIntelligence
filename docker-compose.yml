@@ -1,0 +1,14 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: udi-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: "LocalOnly_StrongPassword_2026!"
+    ports:
+      - "1433:1433"
+    volumes:
+      - udi_sql_data:/var/opt/mssql
+volumes:
+  udi_sql_data:

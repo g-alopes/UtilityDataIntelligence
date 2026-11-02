@@ -1,0 +1,30 @@
+@page "/system-status"
+@inject IHttpClientFactory Factory
+<PageTitle>System status</PageTitle>
+<h1>Local system status</h1><p class="muted">Connectivity checks for local dependencies.</p>
+<article>
+    <p>API: <b class="@(_api ? "good" : "bad")">@(_api ? "Available" : "Unavailable")</b></p>
+    <p>Ollama: <b>@(_ai ? "Available" : "Optional / offline")</b></p>
+    <button @onclick="RefreshAsync">Refresh</button>
+    @if (_error is not null)
+    {
+        <p class="bad">@_error</p>
+    }
+</article>
+@code {
+    bool _api, _ai; string? _error;
+    protected override async Task OnInitializedAsync() => await RefreshAsync();
+    async Task RefreshAsync()
+    {
+        try
+        {
+            var c = Factory.CreateClient("Api");
+            using var a = await c.GetAsync("/health"); _api = a.IsSuccessStatusCode;
+            using var b = await c.GetAsync("/health/ai");
+            var result = await b.Content.ReadFromJsonAsync<AiHealth>(); _ai = result?.available == true;
+            _error = null;
+        }
+        catch (Exception ex) { _api = false; _ai = false; _error = ex.Message; }
+    }
+    sealed record AiHealth(bool available);
+}
