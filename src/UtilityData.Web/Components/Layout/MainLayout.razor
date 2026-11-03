@@ -1,4 +1,7 @@
 @inherits LayoutComponentBase
+@implements IDisposable
+
+@inject UiAuthSession Session
 
 <div class="shell">
     <aside>
@@ -13,8 +16,38 @@
 
     <main>
         <header>
-            <span>LOCAL ENVIRONMENT</span>
-            Utility Data Intelligence
+            <div class="header-brand">
+                Utility Data Intelligence
+            </div>
+
+            @if (Session.IsAuthenticated)
+            {
+                <div class="tenant-header">
+                    <div class="tenant-avatar">
+                        @TenantInitial
+                    </div>
+
+                    <div class="tenant-details">
+                        <strong>@(Session.TenantName ?? "Loading tenant...")</strong>
+                        <span>
+                            @(Session.Email ?? "Signed in")
+                            ·
+                            @(Session.Role ?? "User")
+                        </span>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(Session.TenantCode))
+                    {
+                        <span class="tenant-code">
+                            @Session.TenantCode
+                        </span>
+                    }
+                </div>
+            }
+            else
+            {
+                <span class="environment-label">PUBLIC ACCESS</span>
+            }
         </header>
 
         <section>
@@ -22,3 +55,25 @@
         </section>
     </main>
 </div>
+
+@code {
+    private string TenantInitial =>
+        string.IsNullOrWhiteSpace(Session.TenantName)
+            ? "?"
+            : Session.TenantName[..1].ToUpperInvariant();
+
+    protected override void OnInitialized()
+    {
+        Session.Changed += OnSessionChanged;
+    }
+
+    private void OnSessionChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Session.Changed -= OnSessionChanged;
+    }
+}

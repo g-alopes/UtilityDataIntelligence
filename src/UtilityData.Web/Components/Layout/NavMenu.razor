@@ -1,44 +1,104 @@
-﻿<nav class="app-navigation">
-    <div class="navlabel">WORKSPACE</div>
+﻿@implements IDisposable
 
-    <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
-        <span class="nav-icon">⌂</span>
-        Overview
-    </NavLink>
+@inject UiAuthSession Session
+@inject UiAuthService Auth
+@inject NavigationManager Nav
 
-    <NavLink class="nav-link" href="/dashboard">
-        <span class="nav-icon">▦</span>
-        Dashboard
-    </NavLink>
+<nav class="app-navigation">
 
-    <div class="navlabel">DATA MANAGEMENT</div>
+    @if (!Session.IsAuthenticated)
+    {
+        <div class="navlabel">PUBLIC</div>
 
-    <NavLink class="nav-link" href="/accounts">
-        <span class="nav-icon">♙</span>
-        Customer Accounts
-    </NavLink>
+        <NavLink class="nav-link"
+                 href="/"
+                 Match="NavLinkMatch.All">
+            <span class="nav-icon">⌂</span>
+            Overview
+        </NavLink>
 
-    <NavLink class="nav-link" href="/imports">
-        <span class="nav-icon">⇧</span>
-        Data Imports
-    </NavLink>
+        <NavLink class="nav-link" href="/login">
+            <span class="nav-icon">⇥</span>
+            Sign in
+        </NavLink>
 
-    <div class="navlabel">ACCOUNT</div>
+        <NavLink class="nav-link" href="/register">
+            <span class="nav-icon">＋</span>
+            Register tenant
+        </NavLink>
+    }
+    else
+    {
+        <div class="navlabel">WORKSPACE</div>
 
-    <NavLink class="nav-link" href="/login">
-        <span class="nav-icon">⇥</span>
-        Sign in
-    </NavLink>
+        <NavLink class="nav-link" href="/dashboard">
+            <span class="nav-icon">▦</span>
+            Dashboard
+        </NavLink>
 
-    <NavLink class="nav-link" href="/register">
-        <span class="nav-icon">＋</span>
-        Register tenant
-    </NavLink>
+        <div class="navlabel">DATA MANAGEMENT</div>
 
-    <div class="navlabel">SYSTEM</div>
+        <NavLink class="nav-link" href="/accounts">
+            <span class="nav-icon">♙</span>
+            Customer Accounts
+        </NavLink>
 
-    <NavLink class="nav-link" href="/system-status">
-        <span class="nav-icon">⚙</span>
-        System status
-    </NavLink>
+        <NavLink class="nav-link" href="/imports">
+            <span class="nav-icon">⇧</span>
+            Data Imports
+        </NavLink>
+
+        <div class="navlabel">SYSTEM</div>
+
+        <NavLink class="nav-link" href="/system-status">
+            <span class="nav-icon">◉</span>
+            System Status
+        </NavLink>
+
+        <div class="navlabel">ACCOUNT</div>
+
+        <div class="nav-user-info">
+            <strong>@Session.Email</strong>
+            <span>@Session.Role</span>
+        </div>
+
+        @if (Session.Role == "Admin")
+        {
+            <NavLink class="nav-link" href="/tenant-settings">
+                <span class="nav-icon">⚙</span>
+                Tenant Settings
+            </NavLink>
+        }
+
+        <button type="button"
+                class="nav-link nav-logout"
+                @onclick="Logout">
+            <span class="nav-icon">⇥</span>
+            Sign out
+        </button>
+    }
+
 </nav>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Session.Changed += OnSessionChanged;
+    }
+
+    private void OnSessionChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void Logout()
+    {
+        Auth.Logout();
+        Nav.NavigateTo("/login", forceLoad: true);
+    }
+
+    public void Dispose()
+    {
+        Session.Changed -= OnSessionChanged;
+    }
+}
