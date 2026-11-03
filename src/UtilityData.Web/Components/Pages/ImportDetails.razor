@@ -1,0 +1,131 @@
+@page "/imports/{BatchId:guid}"
+
+@inject UiAuthSession Session
+@inject ImportsApiService Imports
+
+<h1>Import Details</h1>
+
+@if (!Session.IsAuthenticated)
+{
+    <p><a href="/login">Sign in</a> to view this batch.</p>
+}
+else if (loading)
+{
+    <p>Loading...</p>
+}
+else if (error is not null)
+{
+    <p class="text-danger">@error</p>
+}
+else if (batch is not null)
+{
+    <p><b>File:</b> @batch.FileName</p>
+    <p><b>Status:</b> @batch.Status</p>
+
+    <p>
+        Total @batch.TotalRecords |
+        Valid @batch.ValidRecords |
+        Invalid @batch.InvalidRecords |
+        Approved @batch.ApprovedRecordCount
+    </p>
+    @if (Session.Role is "Admin" or "Manager"
+        && batch.Status == Domain.Entities.ImportBatchStatus.Completed)
+    {
+        @if (batch.ValidRecords > 0)
+        {
+            <button class="btn btn-success"
+                    @onclick="Approve"
+                    disabled="@busy">
+                @(busy ? "Approving..." : "Approve and commit valid records")
+            </button>
+        }
+        else
+        {
+            <div class="alert-warning">
+                <strong>Import cannot be approved</strong>
+                <p>This import has no valid records to commit.</p>
+            </div>
+        }
+    }
+    @if (message is not null)
+    {
+        <p>@message</p>
+    }
+
+    <h3 class="mt-4">Validation records</h3>
+
+    @if (records is not null)
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Row</th>
+                    <th>Result</th>
+                    <th>Errors</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in records.Records)
+                {
+                    <tr>
+                        <td>@r.RowNumber</td>
+                        <td>@(r.IsValid ? "Valid" : "Invalid")</td>
+                        <td>@r.Errors</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    [Parameter]
+    public Guid BatchId { get; set; }
+
+    ImportBatchDetailDto? batch;
+    ImportRecordsResponse? records;
+    bool loading = true, busy;
+    string? error, message;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Session.IsAuthenticated)
+        {
+            loading = false;
+            return;
+        }
+        try
+        {
+            batch = await Imports.GetBatchAsync(BatchId);
+            records = await Imports.GetRecordsAsync(BatchId);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    async Task Approve()
+    {
+        busy = true;
+
+        try
+        {
+            await Imports.ApproveAsync(BatchId);
+            message = "Batch approved and committed.";
+            batch = await Imports.GetBatchAsync(BatchId);
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

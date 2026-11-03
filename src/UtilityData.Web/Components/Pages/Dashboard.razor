@@ -1,0 +1,53 @@
+@page "/dashboard"
+
+@inject UiAuthSession Session
+@inject DashboardApiService DashboardApiService
+
+<h1>Overview</h1>
+@if (!Session.IsAuthenticated)
+{
+    <p><a href="/login">Sign in</a> to view the dashboard.</p>
+}
+else if (loading)
+{
+
+    <p>Loading metrics...</p>
+}
+else if (error is not null)
+{
+
+    <p class="text-danger">@error</p>
+}
+else if (data is not null)
+{
+    <div class="metric-grid">
+        <div class="metric-card">
+            <span>Customer accounts</span>
+            <strong>@data.CustomerAccountCount</strong>
+            <small>Committed customer records</small>
+        </div>
+
+        <div class="metric-card">
+            <span>Import batches</span>
+            <strong>@data.ImportBatchCount</strong>
+            <small>Total uploaded batches</small>
+        </div>
+
+        <div class="metric-card">
+            <span>Pending approvals</span>
+            <strong>@data.PendingApprovalCount</strong>
+            <small>Batches awaiting approval</small>
+        </div>
+
+        <div class="metric-card">
+            <span>Invalid records</span>
+            <strong>@data.InvalidRecordCount</strong>
+            <small>Records requiring attention</small>
+        </div>
+    </div>
+    <p class="mt-4"><a class="btn btn-primary" href="/imports">Upload customer data</a> <a class="btn btn-outline-secondary" href="/accounts">Browse accounts</a></p>
+}
+@code {
+    DashboardSummaryDto? data; bool loading = true; string? error;
+    protected override async Task OnInitializedAsync() { if (!Session.IsAuthenticated) { loading = false; return; } try { data = await DashboardApiService.GetSummaryAsync(); } catch (Exception ex) { error = ex.Message; } finally { loading = false; } }
+}

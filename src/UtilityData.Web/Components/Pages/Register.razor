@@ -1,0 +1,92 @@
+@page "/register"
+
+@inject UiAuthService Auth
+@inject NavigationManager Nav
+
+<PageTitle>Create workspace | Utility Data Intelligence</PageTitle>
+
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="eyebrow">GET STARTED</div>
+
+        <h1>Create your workspace</h1>
+        <p class="muted">Register your utility company and administrator account.</p>
+
+        <div class="form-group">
+            <label>Company / tenant name</label>
+            <InputText class="form-control"
+                       placeholder="Northwind Energy"
+                       @bind-Value="tenantName" />
+        </div>
+
+        <div class="form-group">
+            <label>Tenant code</label>
+            <InputText class="form-control"
+                       placeholder="NORTHWIND"
+                       @bind-Value="tenantCode" />
+        </div>
+
+        <div class="form-group">
+            <label>Administrator email</label>
+            <InputText class="form-control"
+                       type="email"
+                       placeholder="admin@company.com"
+                       @bind-Value="email" />
+        </div>
+
+        <div class="form-group">
+            <label>Password</label>
+            <InputText class="form-control"
+                       type="password"
+                       placeholder="Create a password"
+                       @bind-Value="password" />
+        </div>
+
+        @if (message is not null)
+        {
+            <div class="alert-error">@message</div>
+        }
+
+        <button class="btn-primary"
+                @onclick="Submit"
+                disabled="@busy">
+            @(busy ? "Creating workspace..." : "Create workspace")
+        </button>
+
+        <p class="auth-footer">
+            Already have an account?
+            <a href="/login">Sign in</a>
+        </p>
+    </div>
+</div>
+
+@code {
+    private string tenantName = "";
+    private string tenantCode = "";
+    private string email = "";
+    private string password = "";
+    private string? message;
+    private bool busy;
+
+    private async Task Submit()
+    {
+        busy = true;
+        message = null;
+
+        try
+        {
+            await Auth.RegisterAsync(
+                new(tenantName, tenantCode, email, password));
+
+            Nav.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

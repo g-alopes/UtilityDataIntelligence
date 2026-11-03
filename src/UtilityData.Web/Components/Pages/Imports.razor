@@ -1,0 +1,46 @@
+@page "/imports"
+
+@inject UiAuthSession Session
+@inject ImportsApiService ImportsApiService
+
+<h1>Data Imports</h1>
+@if (!Session.IsAuthenticated)
+{
+    <p><a href="/login">Sign in</a> to manage imports.</p>
+}
+else
+{
+    <div class="card card-body mb-4" style="max-width:620px">
+        <h4>Upload customer CSV</h4><InputFile OnChange="Selected" accept=".csv,text/csv" />
+        <small>Maximum 50 MB. The API performs authoritative validation.</small>
+        @if (message is not null)
+        {
+            <p>@message</p>
+        }
+        <button class="btn btn-primary mt-2" @onclick="Upload" disabled="@(file is null || busy)">@(busy ? "Uploading..." : "Upload CSV")</button>
+    </div>
+    <h3>Import history</h3>
+    @if (loading)
+    {
+        <p>Loading...</p>
+    }
+    else if (data is not null)
+    {
+        <table class="table">
+            <thead><tr><th>File</th><th>Status</th><th>Total</th><th>Valid</th><th>Invalid</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var b in data.Items)
+                {
+                    <tr><td>@b.FileName</td><td>@b.Status</td><td>@b.TotalRecordCount</td><td>@b.ValidRecordCount</td><td>@b.InvalidRecordCount</td><td><a href="@($"/imports/{b.Id}")">Details</a></td></tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+@code {
+    IBrowserFile? file; PagedResult<ImportBatchDto>? data; bool loading = true, busy; string? message;
+    protected override async Task OnInitializedAsync() => await Load();
+    void Selected(InputFileChangeEventArgs e) { file = e.File; message = file.Size > 50 * 1024 * 1024 ? "File exceeds 50 MB." : null; }
+    async Task Upload() { if (file is null || file.Size > 50 * 1024 * 1024) return; busy = true; try { await using var s = file.OpenReadStream(50 * 1024 * 1024); var b = await ImportsApiService.UploadAsync(s, file.Name); message = $"Upload accepted. Batch: {b?.Id}"; file = null; await Load(); } catch (Exception ex) { message = ex.Message; } finally { busy = false; } }
+    async Task Load() { loading = true; try { data = await ImportsApiService.GetAsync(); } catch (Exception ex) { message = ex.Message; } finally { loading = false; } }
+}

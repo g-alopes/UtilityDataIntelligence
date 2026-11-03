@@ -1,0 +1,74 @@
+@page "/login"
+
+@inject UiAuthService Auth
+@inject NavigationManager Nav
+
+<PageTitle>Sign in | Utility Data Intelligence</PageTitle>
+
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="eyebrow">UTILITY DATA INTELLIGENCE</div>
+
+        <h1>Welcome back</h1>
+        <p class="muted">Sign in to access your implementation workspace.</p>
+
+        <div class="form-group">
+            <label>Email address</label>
+            <InputText class="form-control"
+                       type="email"
+                       placeholder="admin@company.com"
+                       @bind-Value="email" />
+        </div>
+
+        <div class="form-group">
+            <label>Password</label>
+            <InputText class="form-control"
+                       type="password"
+                       placeholder="Enter your password"
+                       @bind-Value="password" />
+        </div>
+
+        @if (error is not null)
+        {
+            <div class="alert-error">@error</div>
+        }
+
+        <button class="btn-primary"
+                @onclick="Submit"
+                disabled="@busy">
+            @(busy ? "Signing in..." : "Sign in")
+        </button>
+
+        <p class="auth-footer">
+            Don't have a workspace?
+            <a href="/register">Create a tenant</a>
+        </p>
+    </div>
+</div>
+
+@code {
+    private string email = "";
+    private string password = "";
+    private string? error;
+    private bool busy;
+
+    private async Task Submit()
+    {
+        busy = true;
+        error = null;
+
+        try
+        {
+            await Auth.LoginAsync(email, password);
+            Nav.NavigateTo("/dashboard");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

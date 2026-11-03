@@ -18,6 +18,7 @@ public static class ImportEndpoints
             .WithMetadata(new RequestSizeLimitAttribute(52 * 1024 * 1024));
         group.MapGet("/{batchId:guid}", StatusAsync);
         group.MapGet("/{batchId:guid}/records", RecordsAsync);
+        group.MapGet("/", ListAsync);
         group.MapPost("/{batchId:guid}/approve", ApproveAsync)
             .RequireAuthorization(policy => policy.RequireRole("Admin", "Manager"));
 
@@ -130,6 +131,51 @@ public static class ImportEndpoints
             .ToListAsync(ct);
 
         return Results.Ok(new { batchId, skip, take, records = rows });
+    }
+
+    private static async Task<IResult> ListAsync(
+    AppDbContext db,
+    ICurrentTenant tenant,
+    int skip = 0,
+    int take = 25,
+    CancellationToken ct = default)
+    {
+        if (skip < 0 || take is < 1 or > 100)
+            return Results.BadRequest(new
+            {
+                message = "skip must be >= 0 and take must be between 1 and 100."
+            });
+
+        var query = db.ImportBatches.AsNoTracking()
+            .Where(x => x.TenantId == tenant.TenantId);
+
+        var totalCount = await query.CountAsync(ct);
+
+        var batches = await query
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(ct);
+
+        var items = batches.Select(x => new
+        {
+            x.Id,
+            x.FileName,
+            Status = x.Status.ToString(),
+            TotalRecordCount = x.TotalRecords,
+            ValidRecordCount = x.ValidRecords,
+            InvalidRecordCount = x.InvalidRecords,
+            x.ApprovedRecordCount,
+            x.CreatedAtUtc
+        });
+
+        return Results.Ok(new
+        {
+            items,
+            totalCount,
+            skip,
+            take
+        });
     }
 
     private static async Task<IResult> ApproveAsync(

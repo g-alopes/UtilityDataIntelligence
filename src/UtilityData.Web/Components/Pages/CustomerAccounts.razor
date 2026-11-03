@@ -1,0 +1,42 @@
+@page "/accounts"
+
+@inject UiAuthSession Session
+@inject CustomerAccountsApiService Accounts
+
+<h1>Customer Accounts</h1>
+@if (!Session.IsAuthenticated)
+{
+    <p><a href="/login">Sign in</a> to view accounts.</p>
+}
+else if (loading)
+{
+
+    <p>Loading...</p>
+}
+else if (error is not null)
+{
+
+    <p class="text-danger">@error</p>
+}
+else if (data is not null)
+{
+    <p>@data.TotalCount account(s) in this tenant.</p>
+    <table class="table">
+        <thead><tr><th>Account number</th><th>Name</th><th>Email</th><th>Created UTC</th></tr></thead>
+        <tbody>
+            @foreach (var x in data.Items)
+            {
+                <tr><td>@x.AccountNumber</td><td>@x.Name</td><td>@x.Email</td><td>@x.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm")</td></tr>
+            }
+        </tbody>
+    </table>
+    <button class="btn btn-outline-secondary" @onclick="Prev" disabled="@(skip == 0)">Previous</button>
+    <button class="btn btn-outline-secondary" @onclick="Next" disabled="@(skip + take >= data.TotalCount)">Next</button>
+}
+@code {
+    PagedResult<CustomerAccountDto>? data; bool loading = true; string? error; int skip; const int take = 25;
+    protected override async Task OnInitializedAsync() => await Load();
+    async Task Load() { loading = true; try { data = await Accounts.GetAsync(skip, take); } catch (Exception ex) { error = ex.Message; } finally { loading = false; } }
+    async Task Prev() { skip = Math.Max(0, skip - take); await Load(); }
+    async Task Next() { if (data is not null && skip + take < data.TotalCount) { skip += take; await Load(); } }
+}
