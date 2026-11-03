@@ -398,6 +398,25 @@ a.btn-primary {
     min-height: 42px;
 }
 
+.alert-message {
+    padding: 13px 16px;
+    border-radius: 8px;
+    margin: 16px 0;
+    font-size: 14px;
+}
+
+.alert-success {
+    color: #176b4a;
+    background: #eaf7f0;
+    border: 1px solid #b9e5ce;
+}
+
+.alert-error {
+    color: #a12622;
+    background: #fff1f0;
+    border: 1px solid #ffd5d2;
+}
+
 @media (max-width: 1000px) {
     .metric-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));

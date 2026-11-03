@@ -179,10 +179,10 @@ public static class ImportEndpoints
     }
 
     private static async Task<IResult> ApproveAsync(
-        Guid batchId,
-        ICurrentTenant tenant,
-        ImportApprovalService approvalService,
-        CancellationToken ct)
+    Guid batchId,
+    ICurrentTenant tenant,
+    ImportApprovalService approvalService,
+    CancellationToken ct)
     {
         try
         {
@@ -197,21 +197,26 @@ public static class ImportEndpoints
                 message = "Valid records were committed to CustomerAccounts."
             });
         }
-        catch (KeyNotFoundException)
+        catch (KeyNotFoundException ex)
         {
-            return Results.NotFound();
+            return Results.Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "Import batch not found",
+                detail: ex.Message);
         }
         catch (InvalidOperationException ex)
         {
-            return Results.Conflict(new { message = ex.Message });
+            return Results.Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Import approval rejected",
+                detail: ex.Message);
         }
-        catch (DbUpdateException ex)
+        catch (DbUpdateException)
         {
-            // The tenant-scoped unique index on CustomerAccounts is the final duplicate guard.
-            return Results.Conflict(new
-            {
-                message = "One or more account numbers now exist for this tenant. The approval was rolled back; review the data and re-import."
-            });
+            return Results.Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Import approval conflict",
+                detail: "One or more account numbers now exist for this tenant. The approval was rolled back; review the data and re-import.");
         }
     }
 }

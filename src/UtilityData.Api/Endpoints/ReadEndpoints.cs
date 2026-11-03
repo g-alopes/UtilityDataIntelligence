@@ -23,8 +23,13 @@ public static class ReadEndpoints
                 .Where(r => batches.Select(b => b.Id).Contains(r.ImportBatchId) && !r.IsValid)
                 .CountAsync();
 
-            return Results.Ok(new { CustomerAccountCount=accountCount, ImportBatchCount=batchCount,
-                PendingApprovalCount=pending, InvalidRecordCount=invalid });
+            return Results.Ok(new
+            {
+                CustomerAccountCount = accountCount,
+                ImportBatchCount = batchCount,
+                PendingApprovalCount = pending,
+                InvalidRecordCount = invalid
+            });
         });
 
         api.MapGet("/customer-accounts", async (int? skip, int? take, AppDbContext db, HttpContext context) =>
@@ -36,10 +41,15 @@ public static class ReadEndpoints
             var query = db.CustomerAccounts.AsNoTracking()
                 .Where(x => x.TenantId == tenantId.Value).OrderBy(x => x.AccountNumber);
             var total = await query.CountAsync();
-            var items = await query.Skip(offset).Take(size).Select(x => new {
-                x.Id, x.AccountNumber, x.CustomerName, x.Email, x.CreatedAtUtc
+            var items = await query.Skip(offset).Take(size).Select(x => new
+            {
+                x.Id,
+                x.AccountNumber,
+                x.CustomerName,
+                x.Email,
+                x.CreatedAtUtc
             }).ToListAsync();
-            return Results.Ok(new { Items=items, TotalCount=total, Skip=offset, Take=size });
+            return Results.Ok(new { Items = items, TotalCount = total, Skip = offset, Take = size });
         });
 
         return app;

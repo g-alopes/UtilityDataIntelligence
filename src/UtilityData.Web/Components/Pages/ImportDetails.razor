@@ -13,10 +13,6 @@ else if (loading)
 {
     <p>Loading...</p>
 }
-else if (error is not null)
-{
-    <p class="text-danger">@error</p>
-}
 else if (batch is not null)
 {
     <p><b>File:</b> @batch.FileName</p>
@@ -39,17 +35,12 @@ else if (batch is not null)
                 @(busy ? "Approving..." : "Approve and commit valid records")
             </button>
         }
-        else
-        {
-            <div class="alert-warning">
-                <strong>Import cannot be approved</strong>
-                <p>This import has no valid records to commit.</p>
-            </div>
-        }
     }
     @if (message is not null)
     {
-        <p>@message</p>
+        <div class="alert-message @(messageType == "success" ? "alert-success" : "alert-error")">
+            @message
+        </div>
     }
 
     <h3 class="mt-4">Validation records</h3>
@@ -85,7 +76,7 @@ else if (batch is not null)
     ImportBatchDetailDto? batch;
     ImportRecordsResponse? records;
     bool loading = true, busy;
-    string? error, message;
+    string? message, messageType;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -98,10 +89,19 @@ else if (batch is not null)
         {
             batch = await Imports.GetBatchAsync(BatchId);
             records = await Imports.GetRecordsAsync(BatchId);
+
+            if (Session.Role is "Admin" or "Manager"
+                  && batch?.Status == Domain.Entities.ImportBatchStatus.Completed 
+                    && batch?.ValidRecords == 0)
+            {
+                message = "Import cannot be approved: This import has no valid records to commit.";
+                messageType = "error";
+            }
         }
         catch (Exception ex)
         {
-            error = ex.Message;
+            message = ex.Message;
+            messageType = "error";
         }
         finally
         {
@@ -112,16 +112,28 @@ else if (batch is not null)
     async Task Approve()
     {
         busy = true;
+        message = null;
+        messageType = null;
 
         try
         {
             await Imports.ApproveAsync(BatchId);
-            message = "Batch approved and committed.";
+
+            message = "Import approved and records committed successfully.";
+            messageType = "success";
+
             batch = await Imports.GetBatchAsync(BatchId);
+            records = await Imports.GetRecordsAsync(BatchId);
         }
-        catch (Exception ex)
+        catch (ApiException ex)
         {
             message = ex.Message;
+            messageType = "error";
+        }
+        catch (Exception)
+        {
+            message = "An unexpected error occurred while approving the import.";
+            messageType = "error";
         }
         finally
         {
