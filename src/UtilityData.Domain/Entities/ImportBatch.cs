@@ -13,7 +13,7 @@ public sealed class ImportBatch
 {
     private ImportBatch() { }
 
-    public ImportBatch(Guid tenantId, Guid createdByUserId, string fileName, string storedFilePath)
+    public ImportBatch(Guid tenantId, Guid createdByUserId, string fileName, string storedFilePath, Guid? importMappingVersionId = null)
     {
         if (tenantId == Guid.Empty) throw new ArgumentException("Tenant ID is required.", nameof(tenantId));
         if (createdByUserId == Guid.Empty) throw new ArgumentException("Creator ID is required.", nameof(createdByUserId));
@@ -25,6 +25,7 @@ public sealed class ImportBatch
         CreatedByUserId = createdByUserId;
         FileName = Path.GetFileName(fileName);
         StoredFilePath = storedFilePath;
+        ImportMappingVersionId = importMappingVersionId;
         Status = ImportBatchStatus.Pending;
         CreatedAtUtc = DateTime.UtcNow;
     }
@@ -34,6 +35,7 @@ public sealed class ImportBatch
     public Guid CreatedByUserId { get; private set; }
     public string FileName { get; private set; } = string.Empty;
     public string StoredFilePath { get; private set; } = string.Empty;
+    public Guid? ImportMappingVersionId { get; private set; }
     public ImportBatchStatus Status { get; private set; }
     public long TotalRecords { get; private set; }
     public long ValidRecords { get; private set; }

@@ -135,6 +135,7 @@ app.MapControllers();
 
 app.MapAuthEndpoints();
 app.MapTenantEndpoints();
+app.MapCustomFieldEndpoints();
 app.MapImportEndpoints();
 app.MapReadEndpoints();
 app.Run();

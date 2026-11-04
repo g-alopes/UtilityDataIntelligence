@@ -193,6 +193,58 @@ namespace UtilityData.Infrastructure.Persistence.Migrations
                     b.ToTable("CustomerAccounts", (string)null);
                 });
 
+            modelBuilder.Entity("UtilityData.Domain.Entities.CustomerAccountCustomValue", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool?>("BooleanValue")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CustomerAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DateValue")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("DecimalValue")
+                        .HasPrecision(19, 6)
+                        .HasColumnType("decimal(19,6)");
+
+                    b.Property<long?>("IntegerValue")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("TenantCustomFieldId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("TextValue")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerAccountId");
+
+                    b.HasIndex("TenantCustomFieldId");
+
+                    b.HasIndex("TenantId", "TenantCustomFieldId");
+
+                    b.HasIndex("TenantId", "CustomerAccountId", "TenantCustomFieldId")
+                        .IsUnique();
+
+                    b.ToTable("CustomerAccountCustomValues", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_CustomerAccountCustomValues_ExactlyOneValue", "((CASE WHEN [TextValue] IS NULL THEN 0 ELSE 1 END) + (CASE WHEN [IntegerValue] IS NULL THEN 0 ELSE 1 END) + (CASE WHEN [DecimalValue] IS NULL THEN 0 ELSE 1 END) + (CASE WHEN [DateValue] IS NULL THEN 0 ELSE 1 END) + (CASE WHEN [BooleanValue] IS NULL THEN 0 ELSE 1 END)) = 1");
+                        });
+                });
+
             modelBuilder.Entity("UtilityData.Domain.Entities.ImportBatch", b =>
                 {
                     b.Property<Guid>("Id")
@@ -226,6 +278,9 @@ namespace UtilityData.Infrastructure.Persistence.Migrations
                         .HasMaxLength(260)
                         .HasColumnType("nvarchar(260)");
 
+                    b.Property<Guid?>("ImportMappingVersionId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<long>("InvalidRecords")
                         .HasColumnType("bigint");
 
@@ -248,11 +303,147 @@ namespace UtilityData.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ImportMappingVersionId");
+
                     b.HasIndex("Status", "CreatedAtUtc");
 
                     b.HasIndex("TenantId", "CreatedAtUtc");
 
                     b.ToTable("ImportBatches", (string)null);
+                });
+
+            modelBuilder.Entity("UtilityData.Domain.Entities.ImportMapping", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("FileFormat")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "IsActive");
+
+                    b.HasIndex("TenantId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("ImportMappings", (string)null);
+                });
+
+            modelBuilder.Entity("UtilityData.Domain.Entities.ImportMappingColumn", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ImportMappingVersionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsRequired")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("SourceColumnName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("TargetFieldKey")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<int>("TargetKind")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("TenantCustomFieldId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ImportMappingVersionId");
+
+                    b.HasIndex("TenantCustomFieldId");
+
+                    b.HasIndex("TenantId", "ImportMappingVersionId", "SourceColumnName")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "ImportMappingVersionId", "TargetFieldKey");
+
+                    b.ToTable("ImportMappingColumns", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ImportMappingColumns_Target", "(([TargetKind] = 1 AND [TargetFieldKey] IS NOT NULL AND [TenantCustomFieldId] IS NULL) OR ([TargetKind] = 2 AND [TargetFieldKey] IS NULL AND [TenantCustomFieldId] IS NOT NULL))");
+                        });
+                });
+
+            modelBuilder.Entity("UtilityData.Domain.Entities.ImportMappingVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DateFormat")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("DecimalSeparator")
+                        .HasMaxLength(1)
+                        .HasColumnType("nvarchar(1)");
+
+                    b.Property<int>("HeaderRowNumber")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ImportMappingId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ThousandsSeparator")
+                        .HasMaxLength(1)
+                        .HasColumnType("nvarchar(1)");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("WorksheetName")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ImportMappingId");
+
+                    b.HasIndex("TenantId", "ImportMappingId", "VersionNumber")
+                        .IsUnique();
+
+                    b.ToTable("ImportMappingVersions", (string)null);
                 });
 
             modelBuilder.Entity("UtilityData.Domain.Entities.ImportRecord", b =>
@@ -336,6 +527,50 @@ namespace UtilityData.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Tenants", (string)null);
+                });
+
+            modelBuilder.Entity("UtilityData.Domain.Entities.TenantCustomField", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DataType")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsRequired")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "IsActive");
+
+                    b.HasIndex("TenantId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("TenantCustomFields", (string)null);
                 });
 
             modelBuilder.Entity("UtilityData.Domain.Entities.TenantMembership", b =>
@@ -490,8 +725,78 @@ namespace UtilityData.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("UtilityData.Domain.Entities.CustomerAccountCustomValue", b =>
+                {
+                    b.HasOne("UtilityData.Domain.Entities.CustomerAccount", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("UtilityData.Domain.Entities.TenantCustomField", null)
+                        .WithMany()
+                        .HasForeignKey("TenantCustomFieldId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("UtilityData.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("UtilityData.Domain.Entities.ImportBatch", b =>
                 {
+                    b.HasOne("UtilityData.Domain.Entities.ImportMappingVersion", null)
+                        .WithMany()
+                        .HasForeignKey("ImportMappingVersionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("UtilityData.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("UtilityData.Domain.Entities.ImportMapping", b =>
+                {
+                    b.HasOne("UtilityData.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("UtilityData.Domain.Entities.ImportMappingColumn", b =>
+                {
+                    b.HasOne("UtilityData.Domain.Entities.ImportMappingVersion", null)
+                        .WithMany()
+                        .HasForeignKey("ImportMappingVersionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("UtilityData.Domain.Entities.TenantCustomField", null)
+                        .WithMany()
+                        .HasForeignKey("TenantCustomFieldId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("UtilityData.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("UtilityData.Domain.Entities.ImportMappingVersion", b =>
+                {
+                    b.HasOne("UtilityData.Domain.Entities.ImportMapping", null)
+                        .WithMany()
+                        .HasForeignKey("ImportMappingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("UtilityData.Domain.Entities.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
@@ -507,6 +812,15 @@ namespace UtilityData.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("UtilityData.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("UtilityData.Domain.Entities.TenantCustomField", b =>
+                {
                     b.HasOne("UtilityData.Domain.Entities.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")

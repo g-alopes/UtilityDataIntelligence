@@ -55,6 +55,7 @@ builder.Services.AddScoped<UiAuthService>();
 builder.Services.AddScoped<DashboardApiService>();
 builder.Services.AddScoped<CustomerAccountsApiService>();
 builder.Services.AddScoped<ImportsApiService>();
+builder.Services.AddScoped<CustomFieldsApiService>();
 
 var app = builder.Build();
 

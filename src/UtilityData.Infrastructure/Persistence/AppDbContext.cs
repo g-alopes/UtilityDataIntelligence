@@ -14,6 +14,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
     public DbSet<TenantMembership> TenantMemberships => Set<TenantMembership>();
     public DbSet<ImportRecord> ImportRecords => Set<ImportRecord>();
+    public DbSet<TenantCustomField> TenantCustomFields => Set<TenantCustomField>();
+    public DbSet<CustomerAccountCustomValue> CustomerAccountCustomValues => Set<CustomerAccountCustomValue>();
+    public DbSet<ImportMapping> ImportMappings => Set<ImportMapping>();
+    public DbSet<ImportMappingVersion> ImportMappingVersions => Set<ImportMappingVersion>();
+    public DbSet<ImportMappingColumn> ImportMappingColumns => Set<ImportMappingColumn>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

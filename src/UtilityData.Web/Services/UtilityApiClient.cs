@@ -76,6 +76,13 @@ public sealed class UtilityApiClient(
         return await response.Content.ReadFromJsonAsync<T>(json);
     }
 
+    public async Task<TResponse?> PutJsonAsync<TRequest, TResponse>(string uri, TRequest body)
+    {
+        using var response = await Client().PutAsJsonAsync(uri, body, json);
+        await Ensure(response);
+        return await response.Content.ReadFromJsonAsync<TResponse>(json);
+    }
+
     private async Task Ensure(HttpResponseMessage response)
     {
         if (response.IsSuccessStatusCode)

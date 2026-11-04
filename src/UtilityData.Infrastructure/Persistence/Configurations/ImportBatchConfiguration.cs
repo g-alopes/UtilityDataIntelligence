@@ -18,5 +18,7 @@ internal sealed class ImportBatchConfiguration : IEntityTypeConfiguration<Import
         b.HasIndex(x => new { x.TenantId, x.CreatedAtUtc });
         b.HasIndex(x => new { x.Status, x.CreatedAtUtc });
         b.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<ImportMappingVersion>().WithMany().HasForeignKey(x => x.ImportMappingVersionId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -48,6 +48,16 @@
             Data Imports
         </NavLink>
 
+        <div class="navlabel">CONFIGURATION</div>
+
+        @if (Session.Role == "Admin")
+        {
+            <NavLink class="nav-link" href="/custom-fields">
+                <span class="nav-icon">✚</span>
+                Custom Fields
+            </NavLink>
+        }
+
         <div class="navlabel">SYSTEM</div>
 
         <NavLink class="nav-link" href="/system-status">
@@ -70,11 +80,12 @@
             </NavLink>
         }
 
-        <form method="post" action="/bff/logout">
+        <form method="post" action="/bff/logout" class="nav-logout-form">
             <AntiforgeryToken />
 
-            <button type="submit" class="nav-logout">
-                Sign out
+            <button type="submit" class="nav-link nav-logout">
+                <span class="nav-icon">⇥</span>
+                <span>Sign out</span>
             </button>
         </form>
     }

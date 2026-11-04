@@ -1,0 +1,479 @@
+@page "/custom-fields"
+
+@inject UiAuthSession Session
+@inject CustomFieldsApiService CustomFieldsApiService
+
+<PageTitle>Custom Fields | Utility Data Intelligence</PageTitle>
+
+<div class="configuration-page">
+
+    <div class="page-heading">
+        <div>
+            <div class="eyebrow">TENANT CONFIGURATION</div>
+            <h1>Custom Fields</h1>
+            <p class="muted">
+                Define additional customer attributes specific to your organization.
+            </p>
+        </div>
+    </div>
+
+    @if (!Session.IsAuthenticated)
+    {
+        <section class="configuration-card">
+            <p>
+                Please
+                <a href="/bff/login" data-enhance-nav="false">sign in</a>
+                to manage custom fields.
+            </p>
+        </section>
+    }
+    else if (Session.Role != "Admin")
+    {
+        <div class="alert-error">
+            Only tenant administrators can manage custom fields.
+        </div>
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+            <div class="alert-error configuration-alert">
+                @error
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(success))
+        {
+            <div class="alert-success configuration-alert">
+                @success
+            </div>
+        }
+
+    <!-- Create / Edit Form -->
+    <section class="configuration-card configuration-form">
+
+        <div class="configuration-section-heading">
+            <div>
+                <h2>
+                    @(editingId is null
+                                        ? "Create custom field"
+                                        : "Edit custom field")
+                </h2>
+
+                    <p class="muted">
+                        Field names are stable identifiers used by import mappings.
+                        They cannot be changed after creation.
+                    </p>
+                </div>
+
+            @if (editingId is not null)
+                {
+                    <span class="status-pill status-editing">
+                        Editing
+                    </span>
+                }
+            </div>
+
+            <div class="configuration-form-grid">
+
+                <div class="form-group">
+                    <label for="fieldName">Field name</label>
+
+                    <input id="fieldName"
+                           class="form-control"
+                           @bind="name"
+                           disabled="@(editingId is not null || busy)"
+                           placeholder="TransformerId" />
+
+                    <small>
+                        Use letters, numbers and underscores.
+                        Start with a letter or underscore.
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label for="fieldLabel">Display label</label>
+
+                    <input id="fieldLabel"
+                           class="form-control"
+                           @bind="label"
+                           disabled="@busy"
+                           placeholder="Transformer ID" />
+                </div>
+
+                <div class="form-group">
+                    <label for="fieldType">Data type</label>
+
+                    <select id="fieldType"
+                            class="form-control"
+                            @bind="dataType"
+                            disabled="@(editingId is not null || busy)">
+
+                        <option value="Text">Text</option>
+                        <option value="Integer">Integer</option>
+                        <option value="Decimal">Decimal</option>
+                        <option value="Date">Date</option>
+                        <option value="Boolean">Boolean</option>
+
+                    </select>
+
+                    @if (editingId is not null)
+                    {
+                        <small>
+                            Data type cannot be changed after creation.
+                        </small>
+                    }
+                </div>
+
+                <div class="configuration-checkbox">
+                    <label class="checkbox-line">
+                        <input type="checkbox"
+                               @bind="isRequired"
+                               disabled="@busy" />
+
+                        <span>
+                            Required for imported customer records
+                        </span>
+                    </label>
+                </div>
+
+            </div>
+
+            <div class="configuration-form-actions">
+
+                @if (editingId is not null)
+                {
+                    <button class="btn-secondary"
+                            @onclick="ResetForm"
+                            disabled="@busy">
+                        Cancel
+                    </button>
+                }
+
+                <button class="btn-primary"
+                        @onclick="Save"
+                        disabled="@busy">
+
+                    @if (busy)
+                    {
+                        <span>Saving...</span>
+                    }
+                    else
+                    {
+                        <span>
+                            @(editingId is null
+                                                ? "Create field"
+                                                : "Save changes")
+                </span>
+                                }
+
+                </button>
+
+            </div>
+
+        </section>
+
+        <!-- Existing Fields -->
+        <section class="configuration-card configuration-list">
+
+            <div class="configuration-section-heading">
+
+                <div>
+                    <h2>Your custom fields</h2>
+
+                    <p class="muted">
+                        @fields.Count field(s) defined for this tenant.
+                    </p>
+                </div>
+
+                <button class="btn-secondary"
+                        @onclick="Load"
+                        disabled="@loading">
+
+                    @(loading ? "Refreshing..." : "Refresh")
+                </button>
+
+            </div>
+
+            @if (loading)
+            {
+                <div class="configuration-loading">
+                    Loading custom fields...
+                </div>
+            }
+            else if (fields.Count == 0)
+            {
+                <div class="empty-state">
+                    <h3>No custom fields yet</h3>
+
+                    <p>
+                        Create your first tenant-specific field.
+                        It will become available as an import mapping destination.
+                    </p>
+                </div>
+            }
+            else
+            {
+                <div class="data-table-wrapper">
+
+                    <table class="data-table">
+
+                        <thead>
+                            <tr>
+                                <th>Field</th>
+                                <th>Type</th>
+                                <th>Required</th>
+                                <th>Status</th>
+                                <th class="actions-column">Actions</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            @foreach (var field in fields)
+                            {
+                                <tr @key="field.Id">
+
+                                    <td>
+                                        <div class="table-primary-text">
+                                            @field.Label
+                                        </div>
+
+                                        <div class="table-secondary-text">
+                                            @field.Name
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        @field.DataType
+                                    </td>
+
+                                    <td>
+                                        @(field.IsRequired ? "Yes" : "No")
+                                    </td>
+
+                                    <td>
+                                        <span class="status-pill @(field.IsActive
+                                                                                          ? "status-active"
+                                                                                          : "status-inactive")">
+
+                                @(field.IsActive ? "Active" : "Inactive")
+
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        <div class="table-actions">
+
+                                            <button class="btn-small btn-secondary"
+                                                    @onclick="() => Edit(field)"
+                                                    disabled="@busy">
+                                                Edit
+                                            </button>
+
+                                @if (field.IsActive)
+                                            {
+                                                <button class="btn-small btn-danger"
+                                                        @onclick="() => SetActive(field, false)"
+                                                        disabled="@busy">
+                                                    Deactivate
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn-small btn-success"
+                                                        @onclick="() => SetActive(field, true)"
+                                                        disabled="@busy">
+                                                    Activate
+                                                </button>
+                                            }
+
+                                        </div>
+                                    </td>
+
+                                </tr>
+                            }
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+            }
+
+        </section>
+    }
+</div>
+
+@code {
+    private List<CustomFieldDto> fields = [];
+
+    private Guid? editingId;
+
+    private string name = "";
+    private string label = "";
+    private string dataType = "Text";
+
+    private bool isRequired;
+    private bool loading = true;
+    private bool busy;
+
+    private string? error;
+    private string? success;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.IsAuthenticated && Session.Role == "Admin")
+        {
+            await Load();
+        }
+        else
+        {
+            loading = false;
+        }
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+        error = null;
+
+        try
+        {
+            fields = (await CustomFieldsApiService.GetAllAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task Save()
+    {
+        error = null;
+        success = null;
+
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            error = "Display label is required.";
+            return;
+        }
+
+        if (editingId is null && string.IsNullOrWhiteSpace(name))
+        {
+            error = "Field name is required.";
+            return;
+        }
+
+        if (!Enum.TryParse<CustomFieldDataType>(
+                dataType,
+                out var parsedDataType))
+        {
+            error = "Select a valid data type.";
+            return;
+        }
+
+        busy = true;
+
+        try
+        {
+            if (editingId is null)
+            {
+                await CustomFieldsApiService.CreateAsync(
+                    new CreateCustomFieldRequest(
+                        name.Trim(),
+                        label.Trim(),
+                        parsedDataType,
+                        isRequired));
+
+                success = "Custom field created.";
+            }
+            else
+            {
+                await CustomFieldsApiService.UpdateAsync(
+                    editingId.Value,
+                    new UpdateCustomFieldRequest(
+                        label.Trim(),
+                        isRequired));
+
+                success = "Custom field updated.";
+            }
+
+            ResetForm();
+
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void Edit(CustomFieldDto field)
+    {
+        editingId = field.Id;
+
+        name = field.Name;
+        label = field.Label;
+        dataType = field.DataType.ToString();
+        isRequired = field.IsRequired;
+
+        error = null;
+        success = null;
+    }
+
+    private async Task SetActive(
+        CustomFieldDto field,
+        bool active)
+    {
+        error = null;
+        success = null;
+
+        busy = true;
+
+        try
+        {
+            if (active)
+            {
+                await CustomFieldsApiService.ActivateAsync(field.Id);
+            }
+            else
+            {
+                await CustomFieldsApiService.DeactivateAsync(field.Id);
+            }
+
+            success = active
+                ? "Custom field activated."
+                : "Custom field deactivated.";
+
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        editingId = null;
+
+        name = "";
+        label = "";
+        dataType = "Text";
+
+        isRequired = false;
+    }
+}
