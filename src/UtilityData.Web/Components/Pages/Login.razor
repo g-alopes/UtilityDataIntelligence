@@ -1,8 +1,5 @@
 @page "/login"
 
-@inject UiAuthService Auth
-@inject NavigationManager Nav
-
 <PageTitle>Sign in | Utility Data Intelligence</PageTitle>
 
 <div class="auth-container">
@@ -10,34 +7,39 @@
         <div class="eyebrow">UTILITY DATA INTELLIGENCE</div>
 
         <h1>Welcome back</h1>
-        <p class="muted">Sign in to access your implementation workspace.</p>
+        <p class="muted">
+            Sign in to access your implementation workspace.
+        </p>
 
-        <div class="form-group">
-            <label>Email address</label>
-            <InputText class="form-control"
+        <form method="post" action="/bff/login">
+            <AntiforgeryToken />
+
+            <div class="form-group">
+                <label for="email">Email address</label>
+                <input id="email"
+                       name="email"
                        type="email"
+                       class="form-control"
                        placeholder="admin@company.com"
-                       @bind-Value="email" />
-        </div>
+                       autocomplete="username"
+                       required />
+            </div>
 
-        <div class="form-group">
-            <label>Password</label>
-            <InputText class="form-control"
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input id="password"
+                       name="password"
                        type="password"
+                       class="form-control"
                        placeholder="Enter your password"
-                       @bind-Value="password" />
-        </div>
+                       autocomplete="current-password"
+                       required />
+            </div>
 
-        @if (error is not null)
-        {
-            <div class="alert-error">@error</div>
-        }
-
-        <button class="btn-primary"
-                @onclick="Submit"
-                disabled="@busy">
-            @(busy ? "Signing in..." : "Sign in")
-        </button>
+            <button type="submit" class="btn-primary">
+                Sign in
+            </button>
+        </form>
 
         <p class="auth-footer">
             Don't have a workspace?
@@ -47,28 +49,14 @@
 </div>
 
 @code {
-    private string email = "";
-    private string password = "";
-    private string? error;
-    private bool busy;
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? Error { get; set; }
 
-    private async Task Submit()
+    private string? ErrorMessage => Error switch
     {
-        busy = true;
-        error = null;
-
-        try
-        {
-            await Auth.LoginAsync(email, password);
-            Nav.NavigateTo("/dashboard");
-        }
-        catch (Exception ex)
-        {
-            error = ex.Message;
-        }
-        finally
-        {
-            busy = false;
-        }
-    }
+        "missing" => "Enter your email address and password.",
+        "invalid" => "The email address or password is incorrect.",
+        "tenant" => "Your tenant could not be loaded or is inactive.",
+        _ => null
+    };
 }

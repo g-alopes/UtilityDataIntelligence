@@ -6,4 +6,5 @@
 *.suo
 .env
 data/
+.keys/
 TestResults/

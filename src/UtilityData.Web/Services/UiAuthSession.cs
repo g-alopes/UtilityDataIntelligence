@@ -1,3 +1,5 @@
+
+using System.Security.Claims;
 using UtilityData.Web.Models;
 
 namespace UtilityData.Web.Services;
@@ -17,14 +19,26 @@ public sealed class UiAuthSession
 
     public event Action? Changed;
 
-    public void SignIn(
-        string token,
-        string email,
-        string? role)
+    public void RestoreFromPrincipal(ClaimsPrincipal principal)
     {
-        AccessToken = token;
-        Email = email;
-        Role = role;
+        if (principal.Identity?.IsAuthenticated != true)
+        {
+            SignOut();
+            return;
+        }
+
+        AccessToken = principal.FindFirstValue("access_token");
+        Email = principal.FindFirstValue(ClaimTypes.Email);
+        Role = principal.FindFirstValue(ClaimTypes.Role);
+
+        var tenantId = principal.FindFirstValue("tenant_id");
+
+        TenantId = Guid.TryParse(tenantId, out var id)
+            ? id
+            : null;
+
+        TenantName = principal.FindFirstValue("tenant_name");
+        TenantCode = principal.FindFirstValue("tenant_code");
 
         Changed?.Invoke();
     }

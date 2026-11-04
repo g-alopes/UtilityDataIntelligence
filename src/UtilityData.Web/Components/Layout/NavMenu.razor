@@ -17,7 +17,7 @@
             Overview
         </NavLink>
 
-        <NavLink class="nav-link" href="/login">
+        <NavLink class="nav-link" href="/bff/login" data-enhance-nav="false">
             <span class="nav-icon">⇥</span>
             Sign in
         </NavLink>
@@ -70,12 +70,13 @@
             </NavLink>
         }
 
-        <button type="button"
-                class="nav-link nav-logout"
-                @onclick="Logout">
-            <span class="nav-icon">⇥</span>
-            Sign out
-        </button>
+        <form method="post" action="/bff/logout">
+            <AntiforgeryToken />
+
+            <button type="submit" class="nav-logout">
+                Sign out
+            </button>
+        </form>
     }
 
 </nav>
@@ -89,12 +90,6 @@
     private void OnSessionChanged()
     {
         _ = InvokeAsync(StateHasChanged);
-    }
-
-    private void Logout()
-    {
-        Auth.Logout();
-        Nav.NavigateTo("/login", forceLoad: true);
     }
 
     public void Dispose()

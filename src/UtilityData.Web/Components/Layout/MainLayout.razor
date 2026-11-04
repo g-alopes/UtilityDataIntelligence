@@ -2,6 +2,7 @@
 @implements IDisposable
 
 @inject UiAuthSession Session
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <div class="shell">
     <aside>
@@ -24,7 +25,7 @@
             {
                 <div class="tenant-header">
                     <div class="tenant-avatar">
-                        @TenantInitial
+                        @_tenantInitial
                     </div>
 
                     <div class="tenant-details">
@@ -57,13 +58,19 @@
 </div>
 
 @code {
-    private string TenantInitial =>
-        string.IsNullOrWhiteSpace(Session.TenantName)
+    private string? _tenantInitial;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authenticationState =
+            await AuthenticationStateProvider.GetAuthenticationStateAsync();
+
+        Session.RestoreFromPrincipal(authenticationState.User);
+
+        _tenantInitial = string.IsNullOrWhiteSpace(Session.TenantName)
             ? "?"
             : Session.TenantName[..1].ToUpperInvariant();
 
-    protected override void OnInitialized()
-    {
         Session.Changed += OnSessionChanged;
     }
 
