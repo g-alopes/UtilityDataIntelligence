@@ -139,4 +139,5 @@ app.MapCustomFieldEndpoints();
 app.MapImportMappingEndpoints();
 app.MapImportEndpoints();
 app.MapReadEndpoints();
+app.MapImportMappingConfigurationEndpoints();
 app.Run();

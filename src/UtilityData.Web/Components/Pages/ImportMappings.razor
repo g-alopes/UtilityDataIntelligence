@@ -155,6 +155,7 @@
                                     </td>
                                     <td>
                                         <div class="table-actions">
+                                            <a class="btn-small btn-primary" href="/import-mappings/@mapping.Id">Configure</a>
                                             <button type="button" class="btn-small btn-secondary"
                                                     @onclick="() => Edit(mapping)" disabled="@busy">Edit</button>
                                             @if (mapping.IsActive)
@@ -241,7 +242,7 @@
             {
                 await ImportMappingsApiService.CreateAsync(
                     new CreateImportMappingRequest(name.Trim(), NullIfBlank(description), parsedFormat));
-                success = "Import mapping created. Configure its columns in the mapping details in the next phase.";
+                success = "Import mapping created. Open Configure to detect and map its source columns.";
             }
             else
             {

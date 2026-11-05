@@ -57,6 +57,7 @@ builder.Services.AddScoped<CustomerAccountsApiService>();
 builder.Services.AddScoped<ImportsApiService>();
 builder.Services.AddScoped<CustomFieldsApiService>();
 builder.Services.AddScoped<ImportMappingsApiService>();
+builder.Services.AddScoped<ImportMappingConfigurationApiService>();
 
 var app = builder.Build();
 

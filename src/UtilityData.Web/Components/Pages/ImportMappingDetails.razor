@@ -1,0 +1,350 @@
+@page "/import-mappings/{MappingId:guid}"
+@rendermode InteractiveServer
+@inject UiAuthSession Session
+@inject ImportMappingConfigurationApiService MappingApi
+@inject NavigationManager Navigation
+
+<PageTitle>Mapping Configuration | Utility Data Intelligence</PageTitle>
+
+<div class="configuration-page">
+    <div class="page-heading">
+        <div>
+            <div class="eyebrow">DATA CONFIGURATION</div>
+            <h1>@(configuration?.Name ?? "Import mapping")</h1>
+            <p class="muted">Configure source columns, destination fields and file parsing rules.</p>
+        </div>
+        <a class="btn-secondary" href="/import-mappings">Back to mappings</a>
+    </div>
+
+    @if (!Session.IsAuthenticated)
+    {
+        <div class="alert-error">Please sign in to configure import mappings.</div>
+    }
+    else if (Session.Role is not ("Admin" or "Manager"))
+    {
+        <div class="alert-error">Only tenant administrators and managers can configure import mappings.</div>
+    }
+    else if (loading)
+    {
+        <div class="configuration-card configuration-loading">Loading mapping configuration...</div>
+    }
+    else if (configuration is null)
+    {
+        <div class="alert-error">The mapping could not be found for this tenant.</div>
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+            <div class="alert-error configuration-alert">@error</div>
+        }
+        @if (!string.IsNullOrWhiteSpace(success))
+        {
+            <div class="alert-success configuration-alert">@success</div>
+        }
+
+        <div class="mapping-summary configuration-card">
+            <div><span class="summary-label">FILE FORMAT</span><strong>@configuration.FileFormat</strong></div>
+            <div><span class="summary-label">CURRENT VERSION</span><strong>v@(configuration.CurrentVersionNumber)</strong></div>
+            <div><span class="summary-label">MAPPING STATUS</span><strong>@(configuration.IsActive ? "Active" : "Inactive")</strong></div>
+            <div><span class="summary-label">MAPPED COLUMNS</span><strong>@configuration.Columns.Count</strong></div>
+        </div>
+
+        @if (!configuration.IsActive)
+        {
+            <div class="alert-error">This mapping is inactive. Activate it from the mappings list before changing its configuration.</div>
+        }
+        else
+        {
+            <section class="configuration-card">
+                <div class="configuration-section-heading">
+                    <div>
+                        <h2>1. Upload a sample file</h2>
+                        <p class="muted">Use a representative file from this tenant. Only its headers are read; no customer data is imported.</p>
+                    </div>
+                </div>
+
+                <div class="sample-upload-row">
+                    <InputFile OnChange="OnFileSelected" accept="@(configuration.FileFormat == ImportFileFormat.Csv ? ".csv,text/csv" : ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")" disabled="@busy" />
+                    <button class="btn-primary" @onclick="Preview" disabled="@(busy || selectedFile is null)">@(previewing ? "Reading file..." : "Detect columns")</button>
+                </div>
+                @if (selectedFile is not null)
+                {
+                    <p class="muted sample-file-name">Selected: @selectedFile.Name (@(Math.Ceiling(selectedFile.Size / 1024d)) KB)</p>
+                }
+                @if (preview is not null && preview.Worksheets?.Count > 0)
+                {
+                    <div class="form-group compact-field">
+                        <label for="worksheet">Worksheet</label>
+                        <select id="worksheet" class="form-control" @bind="worksheetName" disabled="@busy">
+                            @foreach (var sheet in preview.Worksheets)
+                            {
+                                <option value="@sheet">@sheet</option>
+                            }
+                        </select>
+                        <button class="btn-secondary" @onclick="Preview" disabled="@busy">Reload worksheet</button>
+                    </div>
+                }
+                <div class="form-group compact-field">
+                    <label for="headerRow">Header row number</label>
+                    <input id="headerRow" class="form-control narrow-input" type="number" min="1" max="1000" @bind="headerRowNumber" disabled="@busy" />
+                    <small>Set this to the row containing the source column names.</small>
+                </div>
+            </section>
+
+            <section class="configuration-card">
+                <div class="configuration-section-heading">
+                    <div>
+                        <h2>2. Map source columns</h2>
+                        <p class="muted">Each source column can be mapped to one core field or one tenant custom field. Unmapped columns are ignored.</p>
+                    </div>
+                    @if (preview is not null)
+                    {
+                        <span class="status-pill status-active">@columnRows.Count detected</span>
+                    }
+                </div>
+
+                @if (preview is null)
+                {
+                    <div class="empty-state"><h3>No sample file detected</h3><p>Upload a sample file and select Detect columns to configure the mapping.</p></div>
+                }
+                else if (columnRows.Count == 0)
+                {
+                    <div class="alert-error">No usable column headers were found.</div>
+                }
+                else
+                {
+                    <div class="data-table-wrapper">
+                        <table class="data-table mapping-columns-table">
+                            <thead><tr><th>Source column</th><th>Destination type</th><th>Destination field</th><th>Required</th></tr></thead>
+                            <tbody>
+                                @foreach (var row in columnRows)
+                                {
+                                    <tr @key="row.SourceColumnName">
+                                        <td><strong>@row.SourceColumnName</strong></td>
+                                        <td>
+                                            <select class="form-control" value="@row.TargetType" @onchange="e => ChangeTargetType(row, e.Value?.ToString())" disabled="@busy">
+                                                <option value="">Ignore column</option>
+                                                <option value="Core">Core field</option>
+                                                <option value="Custom">Tenant custom field</option>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            @if (row.TargetType == "Core")
+                                            {
+                                                <select class="form-control" @bind="row.TargetKey" disabled="@busy">
+                                                    <option value="">Select core field</option>
+                                                    <option value="AccountNumber">Account Number</option>
+                                                    <option value="CustomerName">Customer Name</option>
+                                                    <option value="Email">Email</option>
+                                                    <option value="ServiceAddress">Service Address</option>
+                                                </select>
+                                            }
+                                            else if (row.TargetType == "Custom")
+                                            {
+                                                <select class="form-control" value="@row.CustomFieldId" @onchange="e => ChangeCustomField(row, e.Value?.ToString())" disabled="@busy">
+                                                    <option value="">Select custom field</option>
+                                                    @foreach (var field in configuration.CustomFields)
+                                                    {
+                                                        <option value="@field.Id">@field.Label (@field.DataType)</option>
+                                                    }
+                                                </select>
+                                            }
+                                            else
+                                            {
+                                                <span class="muted">Ignored</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <label class="checkbox-line mapping-required"><input type="checkbox" @bind="row.IsRequired" disabled="@(busy || string.IsNullOrEmpty(row.TargetType))" /> Required</label>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+
+            <section class="configuration-card">
+                <div class="configuration-section-heading">
+                    <div><h2>3. File parsing options</h2><p class="muted">These settings are saved with this mapping version.</p></div>
+                </div>
+                <div class="mapping-settings-grid">
+                    <div class="form-group"><label for="dateFormat">Date format</label><input id="dateFormat" class="form-control" @bind="dateFormat" placeholder="yyyy-MM-dd" disabled="@busy" /><small>Optional .NET date format, e.g. dd/MM/yyyy.</small></div>
+                    <div class="form-group"><label for="decimalSeparator">Decimal separator</label><select id="decimalSeparator" class="form-control" @bind="decimalSeparator" disabled="@busy"><option value=".">Dot (.)</option><option value=",">Comma (,)</option></select></div>
+                    <div class="form-group"><label for="thousandsSeparator">Thousands separator</label><select id="thousandsSeparator" class="form-control" @bind="thousandsSeparator" disabled="@busy"><option value="">None</option><option value=",">Comma (,)</option><option value=".">Dot (.)</option><option value=" ">Space</option></select></div>
+                </div>
+                <div class="configuration-form-actions">
+                    <button class="btn-primary" @onclick="Save" disabled="@(busy || preview is null || columnRows.Count == 0)">@(saving ? "Saving version..." : $"Save as version {configuration.CurrentVersionNumber + 1}")</button>
+                </div>
+            </section>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid MappingId { get; set; }
+    private MappingConfigurationDto? configuration;
+    private FilePreviewDto? preview;
+    private IBrowserFile? selectedFile;
+    private readonly List<ColumnEditorRow> columnRows = [];
+    private bool loading = true, busy, previewing, saving;
+    private int headerRowNumber = 1;
+    private string? worksheetName, dateFormat, error, success;
+    private string decimalSeparator = ".";
+    private string thousandsSeparator = ",";
+
+    protected override async Task OnParametersSetAsync() => await Load();
+
+    private async Task Load()
+    {
+        loading = true;
+        error = null;
+
+        try
+        {
+            var loadedConfiguration = await MappingApi.GetAsync(MappingId);
+
+            if (loadedConfiguration is null)
+            {
+                configuration = null;
+                columnRows.Clear();
+                preview = null;
+                return;
+            }
+
+            configuration = loadedConfiguration;
+
+            headerRowNumber = configuration.HeaderRowNumber;
+            worksheetName = configuration.WorksheetName;
+            dateFormat = configuration.DateFormat;
+            decimalSeparator = configuration.DecimalSeparator ?? ".";
+            thousandsSeparator = configuration.ThousandsSeparator ?? ",";
+
+            // Important: remove existing rows before rebuilding the table.
+            columnRows.Clear();
+
+            if (configuration.Columns.Count > 0)
+            {
+                preview = new FilePreviewDto(
+                    "Saved mapping",
+                    configuration.FileFormat.ToString(),
+                    configuration.WorksheetName,
+                    configuration.Columns.Select(x => x.SourceColumnName).ToList(),
+                    null);
+
+                foreach (var col in configuration.Columns)
+                {
+                    columnRows.Add(new ColumnEditorRow(
+                        col.SourceColumnName,
+                        col.TargetKind == MappingTargetKind.CoreField
+                            ? "Core"
+                            : "Custom",
+                        col.TargetFieldKey,
+                        col.TenantCustomFieldId?.ToString(),
+                        col.IsRequired));
+                }
+            }
+            else
+            {
+                preview = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void OnFileSelected(InputFileChangeEventArgs args)
+    {
+        selectedFile = args.File;
+        worksheetName = null;
+        preview = null;
+        columnRows.Clear();
+        error = success = null;
+    }
+
+    private async Task Preview()
+    {
+        if (selectedFile is null) return;
+        error = success = null; previewing = busy = true;
+        try
+        {
+            await using var stream = selectedFile.OpenReadStream(10 * 1024 * 1024);
+            preview = await MappingApi.PreviewAsync(stream, selectedFile.Name, headerRowNumber, worksheetName);
+            if (preview is null) throw new InvalidOperationException("The preview response was empty.");
+            worksheetName = preview.WorksheetName;
+            var old = columnRows.ToDictionary(x => x.SourceColumnName, StringComparer.OrdinalIgnoreCase);
+            columnRows.Clear();
+            foreach (var header in preview.Headers)
+            {
+                if (old.TryGetValue(header, out var existing)) columnRows.Add(existing);
+                else columnRows.Add(new ColumnEditorRow(header));
+            }
+            if (columnRows.Count == 0) error = "No column headers were detected.";
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { previewing = busy = false; }
+    }
+
+    private void ChangeTargetType(ColumnEditorRow row, string? value)
+    {
+        row.TargetType = value ?? ""; row.TargetKey = null; row.CustomFieldId = null; row.IsRequired = false;
+    }
+
+    private void ChangeCustomField(ColumnEditorRow row, string? value)
+    {
+        row.CustomFieldId = value;
+        if (Guid.TryParse(value, out var id))
+        {
+            var field = configuration!.CustomFields.FirstOrDefault(x => x.Id == id);
+            row.IsRequired = field?.IsRequired ?? false;
+        }
+    }
+
+    private async Task Save()
+    {
+        error = success = null;
+        var configured = columnRows.Where(x => !string.IsNullOrWhiteSpace(x.TargetType)).ToList();
+        if (configured.Count == 0) { error = "Map at least one source column before saving."; return; }
+        foreach (var row in configured)
+        {
+            if (row.TargetType == "Core" && string.IsNullOrWhiteSpace(row.TargetKey)) { error = $"Select a core destination for '{row.SourceColumnName}'."; return; }
+            if (row.TargetType == "Custom" && !Guid.TryParse(row.CustomFieldId, out _)) { error = $"Select a custom field destination for '{row.SourceColumnName}'."; return; }
+        }
+        var duplicateTargets = configured.GroupBy(x => x.TargetType == "Core" ? $"core:{x.TargetKey}" : $"custom:{x.CustomFieldId}", StringComparer.OrdinalIgnoreCase).FirstOrDefault(x => x.Count() > 1);
+        if (duplicateTargets is not null) { error = "Each destination field can be mapped only once."; return; }
+
+        busy = saving = true;
+        try
+        {
+            var request = new SaveMappingVersionRequest(worksheetName, headerRowNumber, dateFormat,
+                decimalSeparator, string.IsNullOrEmpty(thousandsSeparator) ? null : thousandsSeparator,
+                configured.Select(x => new SaveMappingColumnRequest(x.SourceColumnName,
+                    x.TargetType == "Core" ? MappingTargetKind.CoreField : MappingTargetKind.TenantCustomField,
+                    x.TargetType == "Core" ? x.TargetKey : null,
+                    x.TargetType == "Custom" && Guid.TryParse(x.CustomFieldId, out var id) ? id : null,
+                    x.IsRequired)).ToList());
+            var result = await MappingApi.SaveVersionAsync(MappingId, request);
+            success = result?.Message ?? "Mapping version saved.";
+            await Load();
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = saving = false; }
+    }
+
+    private sealed class ColumnEditorRow(string sourceColumnName, string targetType = "", string? targetKey = null, string? customFieldId = null, bool isRequired = false)
+    {
+        public string SourceColumnName { get; } = sourceColumnName;
+        public string TargetType { get; set; } = targetType;
+        public string? TargetKey { get; set; } = targetKey;
+        public string? CustomFieldId { get; set; } = customFieldId;
+        public bool IsRequired { get; set; } = isRequired;
+    }
+}
