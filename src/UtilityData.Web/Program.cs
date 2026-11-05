@@ -56,6 +56,7 @@ builder.Services.AddScoped<DashboardApiService>();
 builder.Services.AddScoped<CustomerAccountsApiService>();
 builder.Services.AddScoped<ImportsApiService>();
 builder.Services.AddScoped<CustomFieldsApiService>();
+builder.Services.AddScoped<ImportMappingsApiService>();
 
 var app = builder.Build();
 

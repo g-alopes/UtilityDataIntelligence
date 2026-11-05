@@ -1,0 +1,319 @@
+@page "/import-mappings"
+
+@inject UiAuthSession Session
+@inject ImportMappingsApiService ImportMappingsApiService
+
+<PageTitle>Import Mappings | Utility Data Intelligence</PageTitle>
+
+<div class="configuration-page">
+    <div class="page-heading">
+        <div>
+            <div class="eyebrow">TENANT CONFIGURATION</div>
+            <h1>Import Mappings</h1>
+            <p class="muted">
+                Create reusable file layouts that map your source columns to customer account fields.
+            </p>
+        </div>
+    </div>
+
+    @if (!Session.IsAuthenticated)
+    {
+        <section class="configuration-card">
+            <p>Please <a href="/bff/login" data-enhance-nav="false">sign in</a> to manage import mappings.</p>
+        </section>
+    }
+    else if (Session.Role is not ("Admin" or "Manager"))
+    {
+        <div class="alert-error">Only tenant administrators and managers can manage import mappings.</div>
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+            <div class="alert-error configuration-alert">@error</div>
+        }
+        @if (!string.IsNullOrWhiteSpace(success))
+        {
+            <div class="alert-success configuration-alert">@success</div>
+        }
+
+        <section class="configuration-card configuration-form">
+            <div class="configuration-section-heading">
+                <div>
+                    <h2>@(editingId is null ? "Create import mapping" : "Edit mapping details")</h2>
+                    <p class="muted">
+                        A mapping starts at version 1. Column definitions and parsing settings will be configured in its details.
+                    </p>
+                </div>
+                @if (editingId is not null)
+                {
+                    <span class="status-pill status-editing">Editing</span>
+                }
+            </div>
+
+            <div class="configuration-form-grid">
+                <div class="form-group">
+                    <label for="mappingName">Mapping name</label>
+                    <input id="mappingName" class="form-control" @bind="name"
+                           disabled="@busy" maxlength="160" placeholder="Monthly customer accounts" />
+                    <small>Choose a recognizable name. For example, “Monthly CSV - Billing System”.</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="mappingDescription">Description <span class="optional-label">(optional)</span></label>
+                    <textarea id="mappingDescription" class="form-control configuration-textarea"
+                              @bind="description" disabled="@busy" maxlength="1000"
+                              placeholder="Describe the source system or when this mapping should be used."></textarea>
+                </div>
+
+                @if (editingId is null)
+                {
+                    <div class="form-group">
+                        <label for="mappingFormat">File format</label>
+                        <select id="mappingFormat" class="form-control" @bind="fileFormat" disabled="@busy">
+                            <option value="Csv">CSV</option>
+                            <option value="Xlsx">Excel workbook (.xlsx)</option>
+                        </select>
+                    </div>
+                }
+                else
+                {
+                    <div class="form-group">
+                        <label>File format</label>
+                        <input class="form-control" value="@FormatLabel(editingFormat)" disabled />
+                        <small>File format is fixed when the mapping is created.</small>
+                    </div>
+                }
+            </div>
+
+            <div class="configuration-form-actions">
+                @if (editingId is not null)
+                {
+                    <button type="button" class="btn-secondary" @onclick="ResetForm" disabled="@busy">Cancel</button>
+                }
+                <button type="button" class="btn-primary" @onclick="Save" disabled="@busy">
+                    @(busy ? "Saving..." : editingId is null ? "Create mapping" : "Save changes")
+                </button>
+            </div>
+        </section>
+
+        <section class="configuration-card configuration-list">
+            <div class="configuration-section-heading">
+                <div>
+                    <h2>Your import mappings</h2>
+                    <p class="muted">@mappings.Count mapping(s) configured for this tenant.</p>
+                </div>
+                <button type="button" class="btn-secondary" @onclick="Load" disabled="@(loading || busy)">
+                    @(loading ? "Loading..." : "Refresh")
+                </button>
+            </div>
+
+            @if (loading)
+            {
+                <div class="configuration-loading">Loading import mappings...</div>
+            }
+            else if (mappings.Count == 0)
+            {
+                <div class="empty-state">
+                    <h3>No import mappings yet</h3>
+                    <p>Create a mapping for each distinct source file layout your organization receives.</p>
+                </div>
+            }
+            else
+            {
+                <div class="data-table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Mapping</th>
+                                <th>Format</th>
+                                <th>Current version</th>
+                                <th>Status</th>
+                                <th class="actions-column">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var mapping in mappings)
+                            {
+                                <tr @key="mapping.Id">
+                                    <td>
+                                        <div class="table-primary-text">@mapping.Name</div>
+                                        @if (!string.IsNullOrWhiteSpace(mapping.Description))
+                                        {
+                                            <div class="table-secondary-text mapping-description">@mapping.Description</div>
+                                        }
+                                    </td>
+                                    <td><span class="format-pill">@FormatLabel(mapping.FileFormat)</span></td>
+                                    <td>
+                                        <strong>v@(mapping.LatestVersionNumber)</strong>
+                                        <div class="table-secondary-text">@mapping.VersionCount version(s)</div>
+                                    </td>
+                                    <td>
+                                        <span class="status-pill @(mapping.IsActive ? "status-active" : "status-inactive")">
+                                            @(mapping.IsActive ? "Active" : "Inactive")
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="table-actions">
+                                            <button type="button" class="btn-small btn-secondary"
+                                                    @onclick="() => Edit(mapping)" disabled="@busy">Edit</button>
+                                            @if (mapping.IsActive)
+                                            {
+                                                <button type="button" class="btn-small btn-danger"
+                                                        @onclick="() => SetActive(mapping, false)" disabled="@busy">Deactivate</button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="btn-small btn-success"
+                                                        @onclick="() => SetActive(mapping, true)" disabled="@busy">Activate</button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    private List<ImportMappingDto> mappings = [];
+    private Guid? editingId;
+    private ImportFileFormat editingFormat;
+    private string name = "";
+    private string description = "";
+    private string fileFormat = "Csv";
+    private bool loading = true;
+    private bool busy;
+    private string? error;
+    private string? success;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.IsAuthenticated && Session.Role is "Admin" or "Manager")
+            await Load();
+        else
+            loading = false;
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            mappings = (await ImportMappingsApiService.GetAllAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task Save()
+    {
+        error = null;
+        success = null;
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            error = "Mapping name is required.";
+            return;
+        }
+
+        if (!Enum.TryParse<ImportFileFormat>(fileFormat, out var parsedFormat))
+        {
+            error = "Select a valid file format.";
+            return;
+        }
+
+        busy = true;
+        try
+        {
+            if (editingId is null)
+            {
+                await ImportMappingsApiService.CreateAsync(
+                    new CreateImportMappingRequest(name.Trim(), NullIfBlank(description), parsedFormat));
+                success = "Import mapping created. Configure its columns in the mapping details in the next phase.";
+            }
+            else
+            {
+                await ImportMappingsApiService.UpdateAsync(
+                    editingId.Value,
+                    new UpdateImportMappingRequest(name.Trim(), NullIfBlank(description)));
+                success = "Import mapping details updated. Existing mapping versions were not changed.";
+            }
+
+            ResetForm();
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void Edit(ImportMappingDto mapping)
+    {
+        editingId = mapping.Id;
+        editingFormat = mapping.FileFormat;
+        name = mapping.Name;
+        description = mapping.Description ?? "";
+        fileFormat = mapping.FileFormat.ToString();
+        error = success = null;
+    }
+
+    private async Task SetActive(ImportMappingDto mapping, bool active)
+    {
+        error = success = null;
+        busy = true;
+        try
+        {
+            if (active)
+                await ImportMappingsApiService.ActivateAsync(mapping.Id);
+            else
+                await ImportMappingsApiService.DeactivateAsync(mapping.Id);
+
+            success = active ? "Import mapping activated." : "Import mapping deactivated.";
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        editingId = null;
+        editingFormat = default;
+        name = "";
+        description = "";
+        fileFormat = "Csv";
+    }
+
+    private static string? NullIfBlank(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string FormatLabel(ImportFileFormat format) => format switch
+    {
+        ImportFileFormat.Csv => "CSV",
+        ImportFileFormat.Xlsx => "Excel (.xlsx)",
+        _ => format.ToString()
+    };
+}

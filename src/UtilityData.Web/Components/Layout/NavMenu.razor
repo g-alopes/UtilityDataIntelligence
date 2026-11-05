@@ -50,11 +50,19 @@
 
         <div class="navlabel">CONFIGURATION</div>
 
-        @if (Session.Role == "Admin")
+        @if (Session.Role is "Admin")
         {
             <NavLink class="nav-link" href="/custom-fields">
                 <span class="nav-icon">✚</span>
                 Custom Fields
+            </NavLink>
+        }
+
+        @if (Session.Role is "Admin" or "Manager")
+        {
+            <NavLink class="nav-link" href="/import-mappings">
+                <span class="nav-icon">⇄</span>
+                Import Mappings
             </NavLink>
         }
 
@@ -72,7 +80,7 @@
             <span>@Session.Role</span>
         </div>
 
-        @if (Session.Role == "Admin")
+        @if (Session.Role is "Admin")
         {
             <NavLink class="nav-link" href="/tenant-settings">
                 <span class="nav-icon">⚙</span>
