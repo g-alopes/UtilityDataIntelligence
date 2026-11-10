@@ -50,7 +50,8 @@ public sealed class ImportApprovalService(AppDbContext db, ILogger<ImportApprova
                     x.AccountNumber,
                     x.CustomerName,
                     x.Email,
-                    x.ServiceAddress
+                    x.ServiceAddress,
+                    x.Id
                 })
                 .ToListAsync(cancellationToken);
 
@@ -67,9 +68,24 @@ public sealed class ImportApprovalService(AppDbContext db, ILogger<ImportApprova
             await db.CustomerAccounts.AddRangeAsync(accounts, cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
 
-            foreach (var account in accounts)
-                db.Entry(account).State = EntityState.Detached;
+            var rowIds = rows.Select(x => x.Id).ToArray();
+            var stagedValues = await db.ImportRecordCustomValues.AsNoTracking()
+                .Where(x => x.TenantId == tenantId && rowIds.Contains(x.ImportRecordId))
+                .ToListAsync(cancellationToken);
+            var accountByNumber = accounts.ToDictionary(x => x.AccountNumber, StringComparer.OrdinalIgnoreCase);
+            var customValues = stagedValues.Select(value =>
+            {
+                var sourceRow = rows.First(x => x.Id == value.ImportRecordId);
+                var account = accountByNumber[sourceRow.AccountNumber!];
+                return new CustomerAccountCustomValue(tenantId, account.Id, value.TenantCustomFieldId,
+                    value.TextValue, value.IntegerValue, value.DecimalValue, value.DateValue, value.BooleanValue);
+            }).ToList();
+            if (customValues.Count > 0)
+                await db.CustomerAccountCustomValues.AddRangeAsync(customValues, cancellationToken);
+            await db.SaveChangesAsync(cancellationToken);
 
+            foreach (var account in accounts) db.Entry(account).State = EntityState.Detached;
+            foreach (var value in customValues) db.Entry(value).State = EntityState.Detached;
             importedCount += rows.Count;
             lastRowNumber = rows[^1].RowNumber;
         }

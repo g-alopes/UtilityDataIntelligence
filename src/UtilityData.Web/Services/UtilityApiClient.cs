@@ -56,23 +56,18 @@ public sealed class UtilityApiClient(
         await Ensure(response);
     }
 
-    public async Task<T?> UploadAsync<T>(
-        string uri,
-        Stream stream,
-        string fileName)
+    public async Task<T?> UploadAsync<T>(string uri, Stream stream, string fileName, Guid mappingVersionId)
     {
         using var content = new MultipartFormDataContent();
         using var file = new StreamContent(stream);
-
-        file.Headers.ContentType =
-            new MediaTypeHeaderValue("text/csv");
-
+        var extension = Path.GetExtension(fileName);
+        file.Headers.ContentType = new MediaTypeHeaderValue(
+            extension.Equals(".xlsx", StringComparison.OrdinalIgnoreCase)
+                ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : "text/csv");
         content.Add(file, "file", fileName);
-
+        content.Add(new StringContent(mappingVersionId.ToString()), "mappingVersionId");
         using var response = await Client().PostAsync(uri, content);
-
         await Ensure(response);
-
         return await response.Content.ReadFromJsonAsync<T>(json);
     }
 

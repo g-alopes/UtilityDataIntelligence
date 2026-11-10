@@ -19,14 +19,37 @@ public static class ImportEndpoints
         group.MapGet("/{batchId:guid}", StatusAsync);
         group.MapGet("/{batchId:guid}/records", RecordsAsync);
         group.MapGet("/", ListAsync);
+        group.MapGet("/mapping-options", MappingOptionsAsync);
         group.MapPost("/{batchId:guid}/approve", ApproveAsync)
             .RequireAuthorization(policy => policy.RequireRole("Admin", "Manager"));
 
         return app;
     }
 
+
+    private static async Task<IResult> MappingOptionsAsync(AppDbContext db, ICurrentTenant tenant, CancellationToken ct)
+    {
+        var mappings = await db.ImportMappings.AsNoTracking()
+            .Where(x => x.TenantId == tenant.TenantId && x.IsActive)
+            .Select(x => new
+            {
+                x.Id, x.Name, x.FileFormat,
+                Version = db.ImportMappingVersions.AsNoTracking()
+                    .Where(v => v.TenantId == tenant.TenantId && v.ImportMappingId == x.Id)
+                    .OrderByDescending(v => v.VersionNumber)
+                    .Select(v => new { v.Id, v.VersionNumber, v.WorksheetName })
+                    .FirstOrDefault()
+            }).Where(x => x.Version != null).OrderBy(x => x.Name).ToListAsync(ct);
+        return Results.Ok(mappings.Select(x => new
+        {
+            MappingId = x.Id, x.Name, FileFormat = x.FileFormat.ToString(),
+            MappingVersionId = x.Version!.Id, x.Version.VersionNumber, x.Version.WorksheetName
+        }));
+    }
+
     private static async Task<IResult> UploadAsync(
         IFormFile? file,
+        [FromForm] Guid mappingVersionId,
         AppDbContext db,
         ICurrentTenant tenant,
         IOptions<ImportStorageOptions> settings,
@@ -34,11 +57,19 @@ public static class ImportEndpoints
         CancellationToken ct)
     {
         if (file is null || file.Length == 0)
-            return Results.BadRequest(new { message = "Choose a non-empty CSV file." });
+            return Results.BadRequest(new { message = "Choose a non-empty CSV or XLSX file." });
         if (file.Length > settings.Value.MaxFileBytes)
             return Results.BadRequest(new { message = "File exceeds configured size limit." });
-        if (!Path.GetExtension(file.FileName).Equals(".csv", StringComparison.OrdinalIgnoreCase))
-            return Results.BadRequest(new { message = "Only CSV files are accepted." });
+        var extension = Path.GetExtension(file.FileName);
+        var format = extension.Equals(".csv", StringComparison.OrdinalIgnoreCase) ? ImportFileFormat.Csv
+            : extension.Equals(".xlsx", StringComparison.OrdinalIgnoreCase) ? ImportFileFormat.Xlsx : (ImportFileFormat?)null;
+        if (format is null) return Results.BadRequest(new { message = "Only CSV and XLSX files are accepted." });
+        var selected = await (from version in db.ImportMappingVersions
+            join mapping in db.ImportMappings on version.ImportMappingId equals mapping.Id
+            where version.Id == mappingVersionId && version.TenantId == tenant.TenantId
+                && mapping.TenantId == tenant.TenantId && mapping.IsActive && mapping.FileFormat == format.Value
+            select new { version.Id }).FirstOrDefaultAsync(ct);
+        if (selected is null) return Results.BadRequest(new { message = "Select an active mapping version for this tenant that matches the uploaded file format." });
 
         var batchId = Guid.NewGuid();
         var root = Path.IsPathRooted(settings.Value.RootPath)
@@ -46,7 +77,7 @@ public static class ImportEndpoints
             : Path.Combine(env.ContentRootPath, settings.Value.RootPath);
         var folder = Path.Combine(root, tenant.TenantId.ToString("N"));
         Directory.CreateDirectory(folder);
-        var storedPath = Path.Combine(folder, $"{batchId:N}.csv");
+        var storedPath = Path.Combine(folder, $"{batchId:N}{(format == ImportFileFormat.Xlsx ? ".xlsx" : ".csv")}");
 
         try
         {
@@ -57,7 +88,7 @@ public static class ImportEndpoints
                 await file.CopyToAsync(output, ct);
             }
 
-            var batch = new ImportBatch(tenant.TenantId, tenant.UserId, file.FileName, storedPath);
+            var batch = new ImportBatch(tenant.TenantId, tenant.UserId, file.FileName, storedPath, mappingVersionId);
             db.ImportBatches.Add(batch);
             await db.SaveChangesAsync(ct);
 
@@ -81,6 +112,7 @@ public static class ImportEndpoints
             {
                 x.Id,
                 x.FileName,
+                x.ImportMappingVersionId,
                 x.Status,
                 x.TotalRecords,
                 x.ValidRecords,
@@ -161,6 +193,7 @@ public static class ImportEndpoints
         {
             x.Id,
             x.FileName,
+            x.ImportMappingVersionId,
             Status = x.Status.ToString(),
             TotalRecordCount = x.TotalRecords,
             ValidRecordCount = x.ValidRecords,

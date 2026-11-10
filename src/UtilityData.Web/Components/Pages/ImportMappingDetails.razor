@@ -146,7 +146,7 @@
                                                     <option value="">Select custom field</option>
                                                     @foreach (var field in configuration.CustomFields)
                                                     {
-                                                        <option value="@field.Id">@field.Label (@field.DataType)</option>
+                                                        <option value="@field.Id">@field.Label (@Enum.GetName(typeof(CustomFieldDataType), field.DataType))</option>
                                                     }
                                                 </select>
                                             }

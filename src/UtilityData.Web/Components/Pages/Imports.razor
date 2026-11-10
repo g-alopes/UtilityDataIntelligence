@@ -1,5 +1,5 @@
 @page "/imports"
-
+@using UtilityData.Web.Models
 @inject UiAuthSession Session
 @inject ImportsApiService ImportsApiService
 
@@ -10,20 +10,31 @@
 }
 else
 {
-    <div class="card card-body mb-4" style="max-width:620px">
-        <h4>Upload customer CSV</h4><InputFile OnChange="Selected" accept=".csv,text/csv" />
-        <small>Maximum 50 MB. The API performs authoritative validation.</small>
-        @if (message is not null)
+    <div class="card card-body mb-4" style="max-width:680px">
+        <h4>Upload customer data</h4>
+        @if (mappingOptions is null || mappingOptions.Count == 0)
         {
-            <p>@message</p>
+            <p class="text-muted">No active mapping versions are available. Create and configure an import mapping first.</p>
+            <a class="btn btn-outline-primary" href="/import-mappings">Manage import mappings</a>
         }
-        <button class="btn btn-primary mt-2" @onclick="Upload" disabled="@(file is null || busy)">@(busy ? "Uploading..." : "Upload CSV")</button>
+        else
+        {
+            <label class="form-label" for="mappingVersion">Import mapping</label>
+            <select id="mappingVersion" class="form-select mb-3" @bind="selectedMappingVersionId">
+                <option value="">Select a mapping...</option>
+                @foreach (var option in mappingOptions)
+                {
+                    <option value="@option.MappingVersionId">@option.Name — v@(option.VersionNumber) (@option.FileFormat)</option>
+                }
+            </select>
+            <InputFile OnChange="Selected" accept=".csv,.xlsx" />
+            <small class="d-block text-muted mt-1">Maximum 50 MB. The selected mapping version is pinned to this import.</small>
+            @if (message is not null) { <p class="mt-2">@message</p> }
+            <button class="btn btn-primary mt-2" @onclick="Upload" disabled="@(file is null || selectedMappingVersionId == Guid.Empty || busy)">@(busy ? "Uploading..." : "Upload file")</button>
+        }
     </div>
     <h3>Import history</h3>
-    @if (loading)
-    {
-        <p>Loading...</p>
-    }
+    @if (loading) { <p>Loading...</p> }
     else if (data is not null)
     {
         <table class="table">
@@ -38,9 +49,51 @@ else
     }
 }
 @code {
-    IBrowserFile? file; PagedResult<ImportBatchDto>? data; bool loading = true, busy; string? message;
-    protected override async Task OnInitializedAsync() => await Load();
-    void Selected(InputFileChangeEventArgs e) { file = e.File; message = file.Size > 50 * 1024 * 1024 ? "File exceeds 50 MB." : null; }
-    async Task Upload() { if (file is null || file.Size > 50 * 1024 * 1024) return; busy = true; try { await using var s = file.OpenReadStream(50 * 1024 * 1024); var b = await ImportsApiService.UploadAsync(s, file.Name); message = $"Upload accepted. Batch: {b?.Id}"; file = null; await Load(); } catch (Exception ex) { message = ex.Message; } finally { busy = false; } }
-    async Task Load() { loading = true; try { data = await ImportsApiService.GetAsync(); } catch (Exception ex) { message = ex.Message; } finally { loading = false; } }
+    IBrowserFile? file;
+    PagedResult<ImportBatchDto>? data;
+    IReadOnlyList<ImportMappingOptionDto> mappingOptions = [];
+    Guid selectedMappingVersionId;
+    bool loading = true, busy;
+    string? message;
+    protected override async Task OnInitializedAsync()
+    {
+        try { mappingOptions = await ImportsApiService.GetMappingOptionsAsync() ?? []; }
+        catch (Exception ex) { message = ex.Message; }
+        await Load();
+    }
+    void Selected(InputFileChangeEventArgs e)
+    {
+        file = e.File;
+        message = file.Size > 50 * 1024 * 1024 ? "File exceeds 50 MB." : null;
+        if (file.Size <= 50 * 1024 * 1024 && selectedMappingVersionId != Guid.Empty)
+        {
+            var option = mappingOptions.FirstOrDefault(x => x.MappingVersionId == selectedMappingVersionId);
+            if (option is not null && !Path.GetExtension(file.Name).Equals(option.FileFormat == "Xlsx" ? ".xlsx" : ".csv", StringComparison.OrdinalIgnoreCase))
+                message = $"The selected mapping expects {option.FileFormat} files.";
+        }
+    }
+    async Task Upload()
+    {
+        if (file is null || file.Size > 50 * 1024 * 1024 || selectedMappingVersionId == Guid.Empty) return;
+        var option = mappingOptions.FirstOrDefault(x => x.MappingVersionId == selectedMappingVersionId);
+        if (option is null || !Path.GetExtension(file.Name).Equals(option.FileFormat == "Xlsx" ? ".xlsx" : ".csv", StringComparison.OrdinalIgnoreCase))
+        { message = "The file extension does not match the selected mapping format."; return; }
+        busy = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(50 * 1024 * 1024);
+            var accepted = await ImportsApiService.UploadAsync(stream, file.Name, selectedMappingVersionId);
+            message = $"Upload accepted. Batch: {accepted?.BatchId}";
+            file = null; await Load();
+        }
+        catch (Exception ex) { message = ex.Message; }
+        finally { busy = false; }
+    }
+    async Task Load()
+    {
+        loading = true;
+        try { data = await ImportsApiService.GetAsync(); }
+        catch (Exception ex) { message = ex.Message; }
+        finally { loading = false; }
+    }
 }

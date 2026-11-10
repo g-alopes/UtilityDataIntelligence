@@ -32,3 +32,6 @@ public sealed record ImportBatchDetailDto(
     DateTime CreatedAtUtc,
     DateTime? ApprovedAtUtc,
     string? ApprovedByUserId);
+
+public sealed record ImportMappingOptionDto(Guid MappingId, string Name, string FileFormat, Guid MappingVersionId, int VersionNumber, string? WorksheetName);
+public sealed record ImportUploadAcceptedDto(Guid BatchId, string Status);

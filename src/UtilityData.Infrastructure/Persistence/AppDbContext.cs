@@ -14,6 +14,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
     public DbSet<TenantMembership> TenantMemberships => Set<TenantMembership>();
     public DbSet<ImportRecord> ImportRecords => Set<ImportRecord>();
+    public DbSet<ImportRecordCustomValue> ImportRecordCustomValues => Set<ImportRecordCustomValue>();
     public DbSet<TenantCustomField> TenantCustomFields => Set<TenantCustomField>();
     public DbSet<CustomerAccountCustomValue> CustomerAccountCustomValues => Set<CustomerAccountCustomValue>();
     public DbSet<ImportMapping> ImportMappings => Set<ImportMapping>();

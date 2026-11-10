@@ -14,6 +14,7 @@ public sealed class ImportsApiService(UtilityApiClient api)
     int take = 100) =>
     api.GetAsync<ImportRecordsResponse>(
         $"api/imports/{id}/records?skip={skip}&take={take}");
-    public Task<ImportBatchDto?> UploadAsync(Stream stream, string name) => api.UploadAsync<ImportBatchDto>("api/imports", stream, name);
+    public Task<IReadOnlyList<ImportMappingOptionDto>?> GetMappingOptionsAsync() => api.GetAsync<IReadOnlyList<ImportMappingOptionDto>>("api/imports/mapping-options");
+    public Task<ImportUploadAcceptedDto?> UploadAsync(Stream stream, string name, Guid mappingVersionId) => api.UploadAsync<ImportUploadAcceptedDto>("api/imports", stream, name, mappingVersionId);
     public Task ApproveAsync(Guid id) => api.PostAsync($"api/imports/{id}/approve");
 }

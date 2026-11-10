@@ -499,6 +499,56 @@ namespace UtilityData.Infrastructure.Persistence.Migrations
                     b.ToTable("ImportRecords", (string)null);
                 });
 
+            modelBuilder.Entity("UtilityData.Domain.Entities.ImportRecordCustomValue", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool?>("BooleanValue")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateValue")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("DecimalValue")
+                        .HasPrecision(19, 6)
+                        .HasColumnType("decimal(19,6)");
+
+                    b.Property<Guid>("ImportRecordId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long?>("IntegerValue")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("TenantCustomFieldId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("TextValue")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ImportRecordId");
+
+                    b.HasIndex("TenantCustomFieldId");
+
+                    b.HasIndex("TenantId", "ImportRecordId", "TenantCustomFieldId")
+                        .IsUnique();
+
+                    b.ToTable("ImportRecordCustomValues", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ImportRecordCustomValues_ExactlyOneValue", "((CASE WHEN [TextValue] IS NULL THEN 0 ELSE 1 END) + (CASE WHEN [IntegerValue] IS NULL THEN 0 ELSE 1 END) + (CASE WHEN [DecimalValue] IS NULL THEN 0 ELSE 1 END) + (CASE WHEN [DateValue] IS NULL THEN 0 ELSE 1 END) + (CASE WHEN [BooleanValue] IS NULL THEN 0 ELSE 1 END)) = 1");
+                        });
+                });
+
             modelBuilder.Entity("UtilityData.Domain.Entities.Tenant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -810,6 +860,27 @@ namespace UtilityData.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("ImportBatchId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("UtilityData.Domain.Entities.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("UtilityData.Domain.Entities.ImportRecordCustomValue", b =>
+                {
+                    b.HasOne("UtilityData.Domain.Entities.ImportRecord", null)
+                        .WithMany()
+                        .HasForeignKey("ImportRecordId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("UtilityData.Domain.Entities.TenantCustomField", null)
+                        .WithMany()
+                        .HasForeignKey("TenantCustomFieldId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("UtilityData.Domain.Entities.Tenant", null)
