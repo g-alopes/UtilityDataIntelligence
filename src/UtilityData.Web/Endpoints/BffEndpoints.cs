@@ -1,4 +1,3 @@
-﻿
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
@@ -30,6 +29,9 @@ public static class BffEndpoints
         group.MapPost("/logout", LogoutAsync)
             .RequireAuthorization();
 
+        group.MapGet("/session-expired", SessionExpiredAsync)
+            .AllowAnonymous();
+
         return app;
     }
 
@@ -49,6 +51,7 @@ public static class BffEndpoints
             "missing" => "Enter your email address and password.",
             "invalid" => "The email address or password is incorrect.",
             "tenant" => "Your tenant could not be loaded or is inactive.",
+            "expired" => "Your session has expired. Please sign in again.",
             _ => null
         };
 
@@ -255,5 +258,24 @@ public static class BffEndpoints
             CookieAuthenticationDefaults.AuthenticationScheme);
 
         return Results.Redirect("/bff/login");
+    }
+
+    private static async Task<IResult> SessionExpiredAsync(
+        HttpContext context)
+    {
+        // Clear any response content before writing the redirect response.
+        context.Response.Clear();
+
+        await context.SignOutAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme);
+
+        // Use the response directly so the browser receives an explicit
+        // HTTP redirect after the authentication cookie is cleared.
+        context.Response.Headers.CacheControl = "no-store";
+        context.Response.Redirect(
+            "/bff/login?error=expired",
+            permanent: false);
+
+        return Results.Empty;
     }
 }

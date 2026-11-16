@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using ClosedXML.Excel;
+using Microsoft.VisualBasic.FileIO;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using UtilityData.Api.Imports;
@@ -64,12 +66,40 @@ public static class ImportEndpoints
         var format = extension.Equals(".csv", StringComparison.OrdinalIgnoreCase) ? ImportFileFormat.Csv
             : extension.Equals(".xlsx", StringComparison.OrdinalIgnoreCase) ? ImportFileFormat.Xlsx : (ImportFileFormat?)null;
         if (format is null) return Results.BadRequest(new { message = "Only CSV and XLSX files are accepted." });
-        var selected = await (from version in db.ImportMappingVersions
-            join mapping in db.ImportMappings on version.ImportMappingId equals mapping.Id
+        var selected = await (from version in db.ImportMappingVersions.AsNoTracking()
+            join mapping in db.ImportMappings.AsNoTracking() on version.ImportMappingId equals mapping.Id
             where version.Id == mappingVersionId && version.TenantId == tenant.TenantId
                 && mapping.TenantId == tenant.TenantId && mapping.IsActive && mapping.FileFormat == format.Value
-            select new { version.Id }).FirstOrDefaultAsync(ct);
-        if (selected is null) return Results.BadRequest(new { message = "Select an active mapping version for this tenant that matches the uploaded file format." });
+            select new { Version = version }).FirstOrDefaultAsync(ct);
+        if (selected is null) return Results.Problem(
+            statusCode: StatusCodes.Status400BadRequest,
+            title: "Import mapping is not valid",
+            detail: "Select an active mapping version for this tenant that matches the uploaded file format.");
+
+        // Validate the file contract synchronously, before writing it to storage or creating a batch.
+        var configuredHeaders = await db.ImportMappingColumns.AsNoTracking()
+            .Where(x => x.TenantId == tenant.TenantId && x.ImportMappingVersionId == selected.Version.Id)
+            .Select(x => x.SourceColumnName)
+            .ToListAsync(ct);
+        if (configuredHeaders.Count == 0)
+            return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invalid import mapping",
+                detail: "The selected mapping version has no configured source columns.");
+
+        string? headerValidationError;
+        try
+        {
+            await using var validationStream = file.OpenReadStream();
+            headerValidationError = ValidateHeaders(validationStream, format.Value,
+                selected.Version.WorksheetName, selected.Version.HeaderRowNumber, configuredHeaders, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Unable to validate uploaded file",
+                detail: $"The uploaded file could not be read: {ex.Message}");
+        }
+        if (headerValidationError is not null)
+            return Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Uploaded file does not match the selected mapping",
+                detail: headerValidationError);
 
         var batchId = Guid.NewGuid();
         var root = Path.IsPathRooted(settings.Value.RootPath)
@@ -101,6 +131,80 @@ public static class ImportEndpoints
                 File.Delete(storedPath);
             throw;
         }
+    }
+
+    private static string? ValidateHeaders(
+        Stream stream,
+        ImportFileFormat format,
+        string? worksheetName,
+        int headerRowNumber,
+        IReadOnlyCollection<string> configuredHeaders,
+        CancellationToken ct)
+    {
+        string[] headers;
+        if (format == ImportFileFormat.Csv)
+        {
+            using var reader = new StreamReader(stream, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+            using var parser = new TextFieldParser(reader)
+            {
+                TextFieldType = FieldType.Delimited,
+                HasFieldsEnclosedInQuotes = true,
+                TrimWhiteSpace = false
+            };
+            parser.SetDelimiters(",", ";", "\t", "|");
+            string[]? fields = null;
+            for (var row = 1; row <= headerRowNumber; row++)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (parser.EndOfData)
+                    return $"The configured header row ({headerRowNumber}) is beyond the end of the CSV file.";
+                fields = parser.ReadFields();
+            }
+            headers = fields ?? [];
+        }
+        else
+        {
+            using var workbook = new XLWorkbook(stream);
+            var worksheet = string.IsNullOrWhiteSpace(worksheetName)
+                ? workbook.Worksheets.FirstOrDefault()
+                : workbook.Worksheets.FirstOrDefault(x => string.Equals(x.Name, worksheetName, StringComparison.Ordinal));
+            if (worksheet is null)
+                return string.IsNullOrWhiteSpace(worksheetName)
+                    ? "The uploaded workbook does not contain a worksheet."
+                    : $"The configured worksheet '{worksheetName}' was not found in the uploaded workbook.";
+            var lastColumn = worksheet.LastColumnUsed()?.ColumnNumber() ?? 0;
+            var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 0;
+            if (headerRowNumber > lastRow || lastColumn == 0)
+                return $"The configured header row ({headerRowNumber}) is empty or outside the selected worksheet.";
+            headers = Enumerable.Range(1, lastColumn)
+                .Select(column => worksheet.Cell(headerRowNumber, column).GetString())
+                .ToArray();
+        }
+
+        var headerIndexes = new HashSet<string>(StringComparer.Ordinal);
+        var duplicates = headers.Where(x => !string.IsNullOrEmpty(x))
+            .GroupBy(x => x, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .ToArray();
+        if (duplicates.Length > 0)
+            return "The uploaded file contains duplicate column header(s): " +
+                string.Join(", ", duplicates.Select(x => $"'{x}'")) + ". Column headers must be unique.";
+
+        foreach (var header in headers)
+            if (!string.IsNullOrEmpty(header)) headerIndexes.Add(header);
+
+        var missing = configuredHeaders
+            .Where(header => !headerIndexes.Contains(header))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .ToArray();
+        if (missing.Length == 0) return null;
+
+        return "The uploaded file is missing mapped column header(s): " +
+            string.Join(", ", missing.Select(x => $"'{x}'")) +
+            ". Header names must match exactly, including capitalization, spaces and punctuation. No import batch was created.";
     }
 
     private static async Task<IResult> StatusAsync(

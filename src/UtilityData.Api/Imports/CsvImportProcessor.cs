@@ -41,11 +41,29 @@ public sealed class CsvImportProcessor(AppDbContext db, ILogger<CsvImportProcess
             var seen = new HashSet<string>(existing, StringComparer.OrdinalIgnoreCase);
             var headersAndRows = ReadRows(batch.StoredFilePath, mapping.FileFormat, version.WorksheetName, version.HeaderRowNumber);
             var headers = headersAndRows.Headers;
-            var headerMap = headers.Select((h, i) => new { Key = h.Trim(), Index = i })
-                .ToDictionary(x => x.Key, x => x.Index, StringComparer.OrdinalIgnoreCase);
-            foreach (var col in columns)
-                if (!headerMap.ContainsKey(col.SourceColumnName))
-                    throw new InvalidDataException($"Mapped source column '{col.SourceColumnName}' was not found in the uploaded file.");
+
+            // Header matching is intentionally exact: case, spaces and punctuation are significant.
+            // Do not trim or use a case-insensitive comparer here; the mapping represents the
+            // source file's column contract and must match it exactly.
+            var headerMap = new Dictionary<string, int>(StringComparer.Ordinal);
+            for (var i = 0; i < headers.Length; i++)
+            {
+                var header = headers[i] ?? string.Empty;
+                if (string.IsNullOrEmpty(header)) continue;
+                if (!headerMap.TryAdd(header, i))
+                    throw new InvalidDataException($"The uploaded file contains duplicate column header '{header}'. Column headers must be unique.");
+            }
+
+            var missingHeaders = columns
+                .Select(x => x.SourceColumnName)
+                .Where(x => !headerMap.ContainsKey(x))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(x => x, StringComparer.Ordinal)
+                .ToArray();
+            if (missingHeaders.Length > 0)
+                throw new InvalidDataException(
+                    "The uploaded file does not match the selected mapping. Missing required mapped column header(s): " +
+                    string.Join(", ", missingHeaders.Select(x => $"'{x}'")) + ". Header names must match exactly, including capitalization, spaces and punctuation.");
 
             var chunk = new List<(ImportRecord Record, List<ImportRecordCustomValue> Values)>(ChunkSize);
             foreach (var row in headersAndRows.Rows)
@@ -133,7 +151,7 @@ public sealed class CsvImportProcessor(AppDbContext db, ILogger<CsvImportProcess
         var lastCol = sheet.LastColumnUsed()?.ColumnNumber() ?? 0;
         var lastRow = sheet.LastRowUsed()?.RowNumber() ?? 0;
         if (headerRow > lastRow || lastCol == 0) throw new InvalidDataException("Configured header row is empty or outside the worksheet.");
-        var h = Enumerable.Range(1, lastCol).Select(c => sheet.Cell(headerRow, c).GetString().Trim()).ToArray();
+        var h = Enumerable.Range(1, lastCol).Select(c => sheet.Cell(headerRow, c).GetString()).ToArray();
         var rows = new List<string[]>();
         for (var r = headerRow + 1; r <= lastRow; r++) rows.Add(Enumerable.Range(1, lastCol).Select(c => sheet.Cell(r, c).GetFormattedString()).ToArray());
         return (h, rows);
